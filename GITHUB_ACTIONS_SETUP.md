@@ -28,7 +28,7 @@ Add the following secrets (exact names required):
 
 ### 2. How the Automation Works
 
-#### Two Automated Workflows
+#### Three Automated Workflows
 
 **Daily KPI Collection:**
 - **Schedule**: Every day at 9:00 AM UTC (11:00 AM CET)
@@ -40,6 +40,12 @@ Add the following secrets (exact names required):
 - **Schedule**: Every day at 9:30 AM UTC (11:30 AM CET) - 30 minutes later
 - **Purpose**: Detailed order-level analytics (customer info, geography, etc.)
 - **Database**: Orders Analytics database  
+- **Data Sources**: Shopify only
+
+**Financial Analytics Collection:**
+- **Schedule**: Every day at 10:00 AM UTC (12:00 PM CET) - 1 hour later
+- **Purpose**: Transaction-level financial data (fees, payments, profitability)
+- **Database**: Financial Analytics database
 - **Data Sources**: Shopify only
 
 #### Manual Runs
