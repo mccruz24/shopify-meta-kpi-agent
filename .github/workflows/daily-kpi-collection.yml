@@ -1,0 +1,69 @@
+name: Daily KPI Collection
+
+on:
+  # Run every day at 9:00 AM UTC (11:00 AM CET)
+  schedule:
+    - cron: '0 9 * * *'
+  
+  # Allow manual triggering
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Specific date to collect (YYYY-MM-DD, leave empty for yesterday)'
+        required: false
+        type: string
+
+jobs:
+  collect-kpis:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run daily KPI collection
+      env:
+        # Notion credentials
+        NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        NOTION_DAILY_KPIS_DB: ${{ secrets.NOTION_DAILY_KPIS_DB }}
+        
+        # Shopify credentials
+        SHOPIFY_SHOP_URL: ${{ secrets.SHOPIFY_SHOP_URL }}
+        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+        
+        # Meta Ads credentials
+        META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+        META_AD_ACCOUNT_ID: ${{ secrets.META_AD_ACCOUNT_ID }}
+        
+        # Printify credentials
+        PRINTIFY_API_TOKEN: ${{ secrets.PRINTIFY_API_TOKEN }}
+        PRINTIFY_SHOP_ID: ${{ secrets.PRINTIFY_SHOP_ID }}
+      run: |
+        if [ -n "${{ inputs.date }}" ]; then
+          echo "Running for specific date: ${{ inputs.date }}"
+          python daily_kpi_scheduler.py "${{ inputs.date }}"
+        else
+          echo "Running for yesterday (default)"
+          python daily_kpi_scheduler.py
+        fi
+    
+    - name: Upload logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: kpi-collection-logs
+        path: |
+          *.log
+          *.txt
+        retention-days: 7
