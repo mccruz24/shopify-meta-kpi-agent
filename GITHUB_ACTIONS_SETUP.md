@@ -22,13 +22,14 @@ Add the following secrets (exact names required):
 - `META_ACCESS_TOKEN` - Your Meta Ads API access token
 - `META_AD_ACCOUNT_ID` - Your Meta ad account ID (with `act_` prefix)
 
-#### Printify Secrets (for Daily KPIs only)
+#### Printify Secrets
 - `PRINTIFY_API_TOKEN` - Your Printify API token
 - `PRINTIFY_SHOP_ID` - Your Printify shop ID
+- `PRINTIFY_ANALYTICS_DB_ID` - Your Printify Analytics Notion database ID
 
 ### 2. How the Automation Works
 
-#### Three Automated Workflows
+#### Four Automated Workflows
 
 **Daily KPI Collection:**
 - **Schedule**: Every day at 9:00 AM UTC (11:00 AM CET)
@@ -47,6 +48,18 @@ Add the following secrets (exact names required):
 - **Purpose**: Transaction-level financial data (fees, payments, profitability)
 - **Database**: Financial Analytics database
 - **Data Sources**: Shopify only
+
+**Traffic Analytics Collection:**
+- **Schedule**: Every day at 10:30 AM UTC (12:30 PM CET) - 30 minutes later
+- **Purpose**: Session-level traffic and conversion analytics
+- **Database**: Traffic Analytics database
+- **Data Sources**: Shopify order referrer data
+
+**Printify Analytics Collection:**
+- **Schedule**: Every day at 11:00 AM UTC (1:00 PM CET) - 30 minutes later
+- **Purpose**: Cash flow, order management, and product performance
+- **Database**: Printify Analytics database
+- **Data Sources**: Printify API
 
 #### Manual Runs
 - Go to **Actions** tab → Choose the workflow → **Run workflow**
