@@ -12,29 +12,38 @@ Add the following secrets (exact names required):
 
 #### Notion Secrets
 - `NOTION_TOKEN` - Your Notion integration token
-- `NOTION_DAILY_KPIS_DB` - Your Notion database ID
+- `NOTION_DAILY_KPIS_DB` - Your Notion Daily KPIs database ID
 
 #### Shopify Secrets  
 - `SHOPIFY_SHOP_URL` - Your shop URL (e.g., `your-shop.myshopify.com`)
 - `SHOPIFY_ACCESS_TOKEN` - Your Shopify API access token
 
-#### Meta Ads Secrets
+#### Meta Ads Secrets (for Daily KPIs only)
 - `META_ACCESS_TOKEN` - Your Meta Ads API access token
 - `META_AD_ACCOUNT_ID` - Your Meta ad account ID (with `act_` prefix)
 
-#### Printify Secrets
+#### Printify Secrets (for Daily KPIs only)
 - `PRINTIFY_API_TOKEN` - Your Printify API token
 - `PRINTIFY_SHOP_ID` - Your Printify shop ID
 
 ### 2. How the Automation Works
 
-#### Automatic Daily Runs
+#### Two Automated Workflows
+
+**Daily KPI Collection:**
 - **Schedule**: Every day at 9:00 AM UTC (11:00 AM CET)
-- **Data**: Collects previous day's KPIs automatically
-- **Safety**: Won't create duplicates if data already exists
+- **Purpose**: High-level business metrics (revenue, orders, ad spend, etc.)
+- **Database**: Daily KPIs database
+- **Data Sources**: Shopify + Meta Ads + Printify
+
+**Orders Analytics Collection:**
+- **Schedule**: Every day at 9:30 AM UTC (11:30 AM CET) - 30 minutes later
+- **Purpose**: Detailed order-level analytics (customer info, geography, etc.)
+- **Database**: Orders Analytics database  
+- **Data Sources**: Shopify only
 
 #### Manual Runs
-- Go to **Actions** tab → **Daily KPI Collection** → **Run workflow**
+- Go to **Actions** tab → Choose the workflow → **Run workflow**
 - Optional: Specify a custom date (YYYY-MM-DD format)
 - Useful for testing or collecting missed days
 
