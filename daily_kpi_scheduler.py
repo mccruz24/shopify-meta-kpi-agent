@@ -9,6 +9,7 @@ import sys
 from datetime import datetime, timedelta
 import requests
 import time
+import random
 
 # Add project root to path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -50,24 +51,28 @@ class DailyKPIScheduler:
                 }
             }
             
-            response = requests.post(url, headers=self.headers, json=data)
+            response = requests.post(url, headers=self.headers, json=data, timeout=15)
             if response.status_code == 200:
                 results = response.json().get('results', [])
                 return len(results) > 0
+            return False
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+            print(f"⚠️  Timeout checking if date exists, assuming it doesn't exist")
             return False
         except Exception as e:
             print(f"⚠️  Could not check if date exists: {e}")
             return False
 
-    def collect_daily_kpis(self, target_date: datetime = None) -> bool:
-        """Collect and store daily KPIs for the target date"""
+    def collect_daily_kpis(self, target_date: datetime = None, retry_count: int = 0) -> bool:
+        """Collect and store daily KPIs for the target date with retry logic"""
         
         # Default to yesterday if no date specified
         if target_date is None:
             target_date = datetime.now() - timedelta(days=1)
         
         date_str = target_date.strftime('%Y-%m-%d')
-        print(f"🤖 [SCHEDULED] Collecting KPIs for {date_str}")
+        retry_suffix = f" (retry {retry_count})" if retry_count > 0 else ""
+        print(f"🤖 [SCHEDULED] Collecting KPIs for {date_str}{retry_suffix}")
         
         # Check if already exists (avoid duplicates)
         if self.check_date_exists(target_date):
@@ -75,23 +80,26 @@ class DailyKPIScheduler:
             return True
         
         try:
-            # Extract data from all platforms
+            # Extract data from all platforms with enhanced rate limiting
             print(f"   🛍️  Extracting Shopify data...")
             shopify_data = self.shopify.get_daily_sales_data(target_date)
-            time.sleep(2)  # Rate limiting
+            time.sleep(2 + random.uniform(0.5, 1.0))  # 2-3s with jitter
             
             print(f"   📱 Extracting Meta ads data...")
             meta_data = self.meta.get_daily_ad_data(target_date)
-            time.sleep(2)  # Rate limiting
+            time.sleep(2 + random.uniform(0.5, 1.0))  # 2-3s with jitter
             
             print(f"   🖨️  Extracting Printify costs...")
             printify_data = self.printify.get_daily_costs(target_date)
-            time.sleep(2)  # Rate limiting
+            time.sleep(2 + random.uniform(0.5, 1.0))  # 2-3s with jitter
             
-            # Prepare Notion page properties
+            # Prepare Notion page properties with date field
             properties = {
                 "ID": {
                     "title": [{"text": {"content": f"KPIs for {target_date.strftime('%B %d, %Y')}"}}]
+                },
+                "Date": {
+                    "date": {"start": target_date.strftime('%Y-%m-%d')}
                 },
                 "Shopify Sales": {
                     "number": shopify_data.get('shopify_gross_sales', 0)
@@ -134,14 +142,14 @@ class DailyKPIScheduler:
                 }
             }
             
-            # Create page in Notion
+            # Create page in Notion with timeout
             url = "https://api.notion.com/v1/pages"
             data = {
                 "parent": {"database_id": self.daily_kpis_db},
                 "properties": properties
             }
             
-            response = requests.post(url, headers=self.headers, json=data)
+            response = requests.post(url, headers=self.headers, json=data, timeout=30)
             
             if response.status_code == 200:
                 print(f"✅ Successfully added KPIs for {date_str} to Notion")
@@ -161,8 +169,20 @@ class DailyKPIScheduler:
                 print(f"❌ Notion API error {response.status_code}: {response.text}")
                 return False
                 
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            print(f"⚠️  Connection timeout/error for {date_str}: {e}")
+            if retry_count < 2:  # Max 2 retries
+                wait_time = (retry_count + 1) * 5  # 5s, 10s wait
+                print(f"   ⏳ Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+                return self.collect_daily_kpis(target_date, retry_count + 1)
+            return False
         except Exception as e:
             print(f"❌ Error collecting KPIs for {date_str}: {e}")
+            if retry_count < 1:  # One retry for general errors
+                print(f"   ⏳ Retrying in 3 seconds...")
+                time.sleep(3)
+                return self.collect_daily_kpis(target_date, retry_count + 1)
             return False
 
 def main():
