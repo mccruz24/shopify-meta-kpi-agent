@@ -1,0 +1,233 @@
+name: Complete Analytics Pipeline
+
+on:
+  # Run every day at 6:00 AM UTC (7:00 AM CET)
+  schedule:
+    - cron: '0 6 * * *'
+  
+  # Allow manual triggering
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Specific date to collect (YYYY-MM-DD, leave empty for yesterday)'
+        required: false
+        type: string
+
+jobs:
+  # Step 1: Daily KPI Collection
+  daily-kpi:
+    name: "1️⃣ Daily KPI Collection"
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run daily KPI collection
+      env:
+        NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        NOTION_DAILY_KPIS_DB: ${{ secrets.NOTION_DAILY_KPIS_DB }}
+        SHOPIFY_SHOP_URL: ${{ secrets.SHOPIFY_SHOP_URL }}
+        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+        META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+        META_AD_ACCOUNT_ID: ${{ secrets.META_AD_ACCOUNT_ID }}
+        PRINTIFY_API_TOKEN: ${{ secrets.PRINTIFY_API_TOKEN }}
+      run: |
+        if [ -n "${{ inputs.date }}" ]; then
+          echo "🎯 Running Daily KPI for specific date: ${{ inputs.date }}"
+          python daily_kpi_scheduler.py "${{ inputs.date }}"
+        else
+          echo "🎯 Running Daily KPI for yesterday (default)"
+          python daily_kpi_scheduler.py
+        fi
+
+  # Step 2: Orders Analytics (depends on daily-kpi)
+  orders-analytics:
+    name: "2️⃣ Orders Analytics Collection"
+    needs: daily-kpi
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run orders analytics collection
+      env:
+        NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        SHOPIFY_SHOP_URL: ${{ secrets.SHOPIFY_SHOP_URL }}
+        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+      run: |
+        if [ -n "${{ inputs.date }}" ]; then
+          echo "📦 Running Orders Analytics for specific date: ${{ inputs.date }}"
+          python orders_analytics_scheduler.py "${{ inputs.date }}"
+        else
+          echo "📦 Running Orders Analytics for yesterday (default)"
+          python orders_analytics_scheduler.py
+        fi
+
+  # Step 3: Financial Analytics (depends on orders-analytics)
+  financial-analytics:
+    name: "3️⃣ Financial Analytics Collection"
+    needs: orders-analytics
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run financial analytics collection
+      env:
+        NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        SHOPIFY_SHOP_URL: ${{ secrets.SHOPIFY_SHOP_URL }}
+        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+      run: |
+        if [ -n "${{ inputs.date }}" ]; then
+          echo "💰 Running Financial Analytics for specific date: ${{ inputs.date }}"
+          python financial_analytics_scheduler.py "${{ inputs.date }}"
+        else
+          echo "💰 Running Financial Analytics for yesterday (default)"
+          python financial_analytics_scheduler.py
+        fi
+
+  # Step 4: Traffic Analytics (depends on financial-analytics)
+  traffic-analytics:
+    name: "4️⃣ Traffic Analytics Collection"
+    needs: financial-analytics
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run traffic analytics collection
+      env:
+        NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        SHOPIFY_SHOP_URL: ${{ secrets.SHOPIFY_SHOP_URL }}
+        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+      run: |
+        if [ -n "${{ inputs.date }}" ]; then
+          echo "🚗 Running Traffic Analytics for specific date: ${{ inputs.date }}"
+          python traffic_analytics_scheduler.py "${{ inputs.date }}"
+        else
+          echo "🚗 Running Traffic Analytics for yesterday (default)"
+          python traffic_analytics_scheduler.py
+        fi
+
+  # Step 5: Printify Analytics (depends on traffic-analytics)
+  printify-analytics:
+    name: "5️⃣ Printify Analytics Collection"
+    needs: traffic-analytics
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run Printify analytics collection
+      env:
+        NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        PRINTIFY_API_TOKEN: ${{ secrets.PRINTIFY_API_TOKEN }}
+        PRINTIFY_ANALYTICS_DB_ID: ${{ secrets.PRINTIFY_ANALYTICS_DB_ID }}
+      run: |
+        if [ -n "${{ inputs.date }}" ]; then
+          echo "🖨️ Running Printify Analytics for specific date: ${{ inputs.date }}"
+          python printify_analytics_scheduler.py "${{ inputs.date }}"
+        else
+          echo "🖨️ Running Printify Analytics for yesterday (default)"
+          python printify_analytics_scheduler.py
+        fi
+
+  # Summary job to report completion
+  pipeline-summary:
+    name: "📊 Pipeline Summary"
+    needs: [daily-kpi, orders-analytics, financial-analytics, traffic-analytics, printify-analytics]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Pipeline completion summary
+      run: |
+        echo "🎉 Complete Analytics Pipeline Finished!"
+        echo "=================================="
+        echo "Daily KPI: ${{ needs.daily-kpi.result }}"
+        echo "Orders Analytics: ${{ needs.orders-analytics.result }}"
+        echo "Financial Analytics: ${{ needs.financial-analytics.result }}"
+        echo "Traffic Analytics: ${{ needs.traffic-analytics.result }}"
+        echo "Printify Analytics: ${{ needs.printify-analytics.result }}"
+        echo "=================================="
+        
+        if [ "${{ needs.daily-kpi.result }}" == "success" ] && \
+           [ "${{ needs.orders-analytics.result }}" == "success" ] && \
+           [ "${{ needs.financial-analytics.result }}" == "success" ] && \
+           [ "${{ needs.traffic-analytics.result }}" == "success" ] && \
+           [ "${{ needs.printify-analytics.result }}" == "success" ]; then
+          echo "✅ All analytics pipelines completed successfully!"
+        else
+          echo "⚠️ Some pipelines failed. Check individual job logs."
+          exit 1
+        fi
+    
+    - name: Upload pipeline logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: pipeline-summary-logs
+        path: |
+          *.log
+          *.txt
+        retention-days: 7
