@@ -50,8 +50,30 @@ class OrderDetailedAnalyzer:
             # Calculate detailed fees for each transaction
             enhanced_transactions = []
             for tx in transactions:
-                enhanced_tx = self.extractor._enhance_transaction_with_fees(tx, detailed_order)
-                enhanced_transactions.append(enhanced_tx)
+                try:
+                    enhanced_tx = self.extractor._enhance_transaction_with_fees(tx, detailed_order)
+                    enhanced_transactions.append(enhanced_tx)
+                except Exception as e:
+                    print(f"⚠️  Error enhancing transaction {tx.get('id', 'unknown')}: {e}")
+                    # Add basic transaction data without enhancements
+                    basic_tx = {
+                        'transaction_id': str(tx.get('id', '')),
+                        'order_id': str(detailed_order.get('id', '')),
+                        'order_number': detailed_order.get('order_number', ''),
+                        'created_at': tx.get('created_at', ''),
+                        'kind': tx.get('kind', ''),
+                        'status': tx.get('status', ''),
+                        'gross_amount': float(tx.get('amount', 0)),
+                        'currency': tx.get('currency', 'USD'),
+                        'gateway': tx.get('gateway', 'unknown'),
+                        'shopify_payment_fee': 0,
+                        'currency_conversion_fee': 0,
+                        'transaction_fee': 0,
+                        'vat_on_fees': 0,
+                        'total_fees': 0,
+                        'net_amount': float(tx.get('amount', 0))
+                    }
+                    enhanced_transactions.append(basic_tx)
             
             # Create comprehensive analysis
             analysis = self._create_comprehensive_analysis(detailed_order, enhanced_transactions)
@@ -80,35 +102,46 @@ class OrderDetailedAnalyzer:
         print(f"🔎 Searching for order #{order_number}...")
         
         # Clean order number (remove # if present)
-        clean_order_number = order_number.replace('#', '')
+        clean_order_number = str(order_number).replace('#', '').strip()
         
-        # Search orders by order number
-        orders_data = self.extractor._make_request('orders.json', {
-            'name': clean_order_number,
-            'limit': 1,
-            'status': 'any'
-        })
-        
-        if orders_data and orders_data.get('orders'):
-            order = orders_data['orders'][0]
-            print(f"✅ Found order #{order.get('order_number')} (ID: {order.get('id')})")
-            return order
-        
-        # Try searching with different parameters
-        orders_data = self.extractor._make_request('orders.json', {
-            'limit': 250,
-            'status': 'any',
-            'fields': 'id,order_number,name'
-        })
-        
-        if orders_data and orders_data.get('orders'):
-            for order in orders_data['orders']:
-                if str(order.get('order_number')) == clean_order_number or str(order.get('name')) == f"#{clean_order_number}":
-                    print(f"✅ Found order #{order.get('order_number')} (ID: {order.get('id')})")
-                    return order
-        
-        print(f"❌ Order #{order_number} not found")
-        return None
+        try:
+            # Search orders by order number
+            orders_data = self.extractor._make_request('orders.json', {
+                'name': clean_order_number,
+                'limit': 1,
+                'status': 'any'
+            })
+            
+            if orders_data and orders_data.get('orders'):
+                order = orders_data['orders'][0]
+                print(f"✅ Found order #{order.get('order_number')} (ID: {order.get('id')})")
+                return order
+            
+            # Try searching with different parameters
+            orders_data = self.extractor._make_request('orders.json', {
+                'limit': 250,
+                'status': 'any',
+                'fields': 'id,order_number,name'
+            })
+            
+            if orders_data and orders_data.get('orders'):
+                for order in orders_data['orders']:
+                    try:
+                        order_num = str(order.get('order_number', ''))
+                        order_name = str(order.get('name', ''))
+                        if order_num == clean_order_number or order_name == f"#{clean_order_number}":
+                            print(f"✅ Found order #{order.get('order_number')} (ID: {order.get('id')})")
+                            return order
+                    except (TypeError, ValueError) as e:
+                        print(f"⚠️  Skipping malformed order data: {e}")
+                        continue
+            
+            print(f"❌ Order #{order_number} not found")
+            return None
+            
+        except Exception as e:
+            print(f"❌ Error searching for order: {e}")
+            return None
     
     def _get_detailed_order_data(self, order_id: str) -> Dict:
         """Get detailed order data"""
@@ -220,9 +253,9 @@ class OrderDetailedAnalyzer:
         }
         
         for tx in transactions:
-            transaction_summary['total_amount_processed'] += tx.get('gross_amount', 0)
-            transaction_summary['total_fees'] += tx.get('total_fees', 0)
-            transaction_summary['net_payout'] += tx.get('net_amount', 0)
+            transaction_summary['total_amount_processed'] += float(tx.get('gross_amount', 0))
+            transaction_summary['total_fees'] += float(tx.get('total_fees', 0))
+            transaction_summary['net_payout'] += float(tx.get('net_amount', 0))
             
             if tx.get('original_currency') and tx.get('converted_currency'):
                 transaction_summary['currency_conversions'].append({
