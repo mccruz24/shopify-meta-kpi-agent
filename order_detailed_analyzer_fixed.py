@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Order Detailed Analyzer
+Order Detailed Analyzer - Fixed Version
 Extract comprehensive data for a specific order to cross-check against Shopify app
 """
 
@@ -55,28 +55,8 @@ class OrderDetailedAnalyzer:
                     enhanced_transactions.append(enhanced_tx)
                 except Exception as e:
                     print(f"⚠️  Error enhancing transaction {tx.get('id', 'unknown')}: {e}")
-                                                              # Add basic transaction data without enhancements
-                     basic_tx = {
-                         'transaction_id': str(tx.get('id', '')),
-                         'order_id': str(detailed_order.get('id', '')),
-                         'order_number': str(detailed_order.get('order_number', '')),
-                         'created_at': str(tx.get('created_at', '')),
-                         'kind': str(tx.get('kind', '')),
-                         'status': str(tx.get('status', '')),
-                         'gross_amount': float(tx.get('amount', 0)),
-                         'gross_amount_usd': float(tx.get('amount', 0)),
-                         'gross_amount_eur': float(tx.get('amount', 0)),
-                         'currency': str(tx.get('currency', 'USD')),
-                         'gateway': str(tx.get('gateway', 'unknown')),
-                         'exchange_rate': 1.0,
-                         'shopify_payment_fee': 0.0,
-                         'shopify_payment_vat': 0.0,
-                         'currency_conversion_fee': 0.0,
-                         'currency_conversion_vat': 0.0,
-                         'transaction_fee': 0.0,
-                         'total_fees': 0.0,
-                         'net_amount': float(tx.get('amount', 0))
-                     }
+                    # Add basic transaction data
+                    basic_tx = self._create_basic_transaction(tx, detailed_order)
                     enhanced_transactions.append(basic_tx)
             
             # Create comprehensive analysis
@@ -105,23 +85,11 @@ class OrderDetailedAnalyzer:
         
         print(f"🔎 Searching for order #{order_number}...")
         
-        # Clean order number (remove # if present)
+        # Clean order number
         clean_order_number = str(order_number).replace('#', '').strip()
         
         try:
-            # Search orders by order number
-            orders_data = self.extractor._make_request('orders.json', {
-                'name': clean_order_number,
-                'limit': 1,
-                'status': 'any'
-            })
-            
-            if orders_data and orders_data.get('orders'):
-                order = orders_data['orders'][0]
-                print(f"✅ Found order #{order.get('order_number')} (ID: {order.get('id')})")
-                return order
-            
-            # Try searching with different parameters
+            # Search orders
             orders_data = self.extractor._make_request('orders.json', {
                 'limit': 250,
                 'status': 'any',
@@ -137,7 +105,6 @@ class OrderDetailedAnalyzer:
                             print(f"✅ Found order #{order.get('order_number')} (ID: {order.get('id')})")
                             return order
                     except (TypeError, ValueError) as e:
-                        print(f"⚠️  Skipping malformed order data: {e}")
                         continue
             
             print(f"❌ Order #{order_number} not found")
@@ -179,35 +146,56 @@ class OrderDetailedAnalyzer:
         print(f"⚠️  No transactions found for order")
         return []
     
+    def _create_basic_transaction(self, tx: Dict, order: Dict) -> Dict:
+        """Create basic transaction data when enhancement fails"""
+        
+        return {
+            'transaction_id': str(tx.get('id', '')),
+            'order_id': str(order.get('id', '')),
+            'order_number': str(order.get('order_number', '')),
+            'created_at': str(tx.get('created_at', '')),
+            'kind': str(tx.get('kind', '')),
+            'status': str(tx.get('status', '')),
+            'gross_amount': float(tx.get('amount', 0)),
+            'gross_amount_usd': float(tx.get('amount', 0)),
+            'gross_amount_eur': float(tx.get('amount', 0)),
+            'currency': str(tx.get('currency', 'USD')),
+            'gateway': str(tx.get('gateway', 'unknown')),
+            'exchange_rate': 1.0,
+            'shopify_payment_fee': 0.0,
+            'shopify_payment_vat': 0.0,
+            'currency_conversion_fee': 0.0,
+            'currency_conversion_vat': 0.0,
+            'transaction_fee': 0.0,
+            'total_fees': 0.0,
+            'net_amount': float(tx.get('amount', 0))
+        }
+    
     def _create_comprehensive_analysis(self, order: Dict, transactions: List[Dict]) -> Dict:
         """Create comprehensive order analysis"""
         
         # Basic order information
         order_info = {
             'order_id': str(order.get('id', '')),
-            'order_number': order.get('order_number', ''),
-            'name': order.get('name', ''),
-            'created_at': order.get('created_at', ''),
-            'updated_at': order.get('updated_at', ''),
-            'processed_at': order.get('processed_at', ''),
-            'financial_status': order.get('financial_status', ''),
-            'fulfillment_status': order.get('fulfillment_status', ''),
-            'tags': order.get('tags', ''),
-            'note': order.get('note', ''),
-            'email': order.get('email', ''),
-            'phone': order.get('phone', '')
+            'order_number': str(order.get('order_number', '')),
+            'name': str(order.get('name', '')),
+            'created_at': str(order.get('created_at', '')),
+            'updated_at': str(order.get('updated_at', '')),
+            'processed_at': str(order.get('processed_at', '')),
+            'financial_status': str(order.get('financial_status', '')),
+            'fulfillment_status': str(order.get('fulfillment_status', '')),
+            'email': str(order.get('email', ''))
         }
         
         # Financial breakdown
         financial_info = {
-            'currency': order.get('currency', 'USD'),
+            'currency': str(order.get('currency', 'USD')),
             'total_price': float(order.get('total_price', 0)),
             'subtotal_price': float(order.get('subtotal_price', 0)),
             'total_discounts': float(order.get('total_discounts', 0)),
             'total_tax': float(order.get('total_tax', 0)),
             'shipping_total': 0,
-            'total_outstanding': float(order.get('total_outstanding', 0)),
-            'total_line_items_price': float(order.get('total_line_items_price', 0))
+            'total_outstanding': float(order.get('total_outstanding', 0))
         }
         
         # Calculate shipping
@@ -219,67 +207,32 @@ class OrderDetailedAnalyzer:
         line_items = []
         for item in order.get('line_items', []):
             line_item = {
-                'id': item.get('id'),
-                'product_id': item.get('product_id'),
-                'variant_id': item.get('variant_id'),
-                'title': item.get('title'),
-                'variant_title': item.get('variant_title'),
-                'sku': item.get('sku'),
-                'quantity': item.get('quantity'),
+                'title': str(item.get('title', '')),
+                'variant_title': str(item.get('variant_title', '')),
+                'sku': str(item.get('sku', '')),
+                'quantity': int(item.get('quantity', 0)),
                 'price': float(item.get('price', 0)),
-                'total_discount': float(item.get('total_discount', 0)),
-                'fulfillable_quantity': item.get('fulfillable_quantity'),
-                'fulfillment_status': item.get('fulfillment_status')
+                'total_discount': float(item.get('total_discount', 0))
             }
             line_items.append(line_item)
-        
-        # Customer information
-        customer_info = {}
-        if order.get('customer'):
-            customer = order['customer']
-            customer_info = {
-                'id': customer.get('id'),
-                'email': customer.get('email'),
-                'first_name': customer.get('first_name'),
-                'last_name': customer.get('last_name'),
-                'orders_count': customer.get('orders_count'),
-                'total_spent': customer.get('total_spent'),
-                'created_at': customer.get('created_at')
-            }
-        
-        # Shipping address
-        shipping_address = order.get('shipping_address', {})
-        
-        # Billing address
-        billing_address = order.get('billing_address', {})
         
         # Transaction analysis
         transaction_summary = {
             'total_transactions': len(transactions),
-            'total_amount_processed': 0,
-            'total_fees': 0,
-            'net_payout': 0,
-            'currency_conversions': []
+            'total_amount_processed': 0.0,
+            'total_fees': 0.0,
+            'net_payout': 0.0
         }
         
         for tx in transactions:
             # Handle both old and new transaction formats
-            gross_amount = tx.get('gross_amount_eur', tx.get('gross_amount', 0))
-            total_fees = tx.get('total_fees', 0)
-            net_amount = tx.get('net_amount', 0)
+            gross_amount = float(tx.get('gross_amount_eur', tx.get('gross_amount', 0)))
+            total_fees = float(tx.get('total_fees', 0))
+            net_amount = float(tx.get('net_amount', 0))
             
-            transaction_summary['total_amount_processed'] += float(gross_amount) if gross_amount else 0
-            transaction_summary['total_fees'] += float(total_fees) if total_fees else 0
-            transaction_summary['net_payout'] += float(net_amount) if net_amount else 0
-            
-            if tx.get('original_currency') and tx.get('converted_currency'):
-                transaction_summary['currency_conversions'].append({
-                    'from': tx.get('original_currency'),
-                    'to': tx.get('converted_currency'),
-                    'original_amount': tx.get('original_amount'),
-                    'converted_amount': tx.get('converted_amount'),
-                    'exchange_rate': tx.get('exchange_rate')
-                })
+            transaction_summary['total_amount_processed'] += gross_amount
+            transaction_summary['total_fees'] += total_fees
+            transaction_summary['net_payout'] += net_amount
         
         return {
             'status': 'success',
@@ -287,9 +240,6 @@ class OrderDetailedAnalyzer:
             'order_info': order_info,
             'financial_info': financial_info,
             'line_items': line_items,
-            'customer_info': customer_info,
-            'shipping_address': shipping_address,
-            'billing_address': billing_address,
             'transactions': transactions,
             'transaction_summary': transaction_summary,
             'raw_order_data': order
@@ -336,50 +286,51 @@ class OrderDetailedAnalyzer:
             print(f"{i}. {item['title']}")
             if item['variant_title']:
                 print(f"   Variant: {item['variant_title']}")
-            print(f"   SKU: {item.get('sku', 'N/A')}")
+            print(f"   SKU: {item['sku']}")
             print(f"   Quantity: {item['quantity']}")
             print(f"   Price: {financial['currency']} {item['price']:.2f}")
-            print(f"   Total Discount: {financial['currency']} {item['total_discount']:.2f}")
+            if item['total_discount'] > 0:
+                print(f"   Total Discount: {financial['currency']} {item['total_discount']:.2f}")
             print()
         
         print(f"💳 TRANSACTION DETAILS")
         print("=" * 40)
         print(f"Total Transactions: {summary['total_transactions']}")
-        print(f"Total Amount Processed: {summary['total_amount_processed']:.2f}")
-        print(f"Total Fees: {summary['total_fees']:.2f}")
-        print(f"Net Payout: {summary['net_payout']:.2f}")
+        print(f"Total Amount Processed: €{summary['total_amount_processed']:.2f}")
+        print(f"Total Fees: €{summary['total_fees']:.2f}")
+        print(f"Net Payout: €{summary['net_payout']:.2f}")
         
-                          for i, tx in enumerate(transactions, 1):
-             print(f"\nTransaction {i}:")
-             print(f"  ID: {tx['transaction_id']}")
-             print(f"  Type: {tx['kind']}")
-             print(f"  Status: {tx['status']}")
-             print(f"  Gateway: {tx['gateway']}")
-             print(f"  Created: {tx['created_at']}")
-             
-             # Show both USD and EUR amounts if conversion happened
-             if tx.get('gross_amount_usd') and tx.get('gross_amount_eur'):
-                 print(f"  Gross Amount USD: ${tx['gross_amount_usd']:.2f}")
-                 print(f"  Gross Amount EUR: €{tx['gross_amount_eur']:.2f}")
-                 print(f"  Exchange Rate: {tx.get('exchange_rate', 0):.6f}")
-             else:
-                 print(f"  Gross Amount: {tx['currency']} {tx.get('gross_amount', 0):.2f}")
-             
-             # Fee breakdown matching Shopify's structure
-             if tx.get('shopify_payment_fee'):
-                 print(f"  Shopify Payment Fee: €{tx['shopify_payment_fee']:.2f}")
-             if tx.get('shopify_payment_vat'):
-                 print(f"  Shopify Payment VAT: €{tx['shopify_payment_vat']:.2f}")
-             if tx.get('currency_conversion_fee'):
-                 print(f"  Currency Conversion Fee: €{tx['currency_conversion_fee']:.2f}")
-             if tx.get('currency_conversion_vat'):
-                 print(f"  Currency Conversion VAT: €{tx['currency_conversion_vat']:.2f}")
-             if tx.get('transaction_fee'):
-                 print(f"  Transaction Fee: €{tx['transaction_fee']:.2f}")
-             if tx.get('total_fees'):
-                 print(f"  Total Fees: €{tx['total_fees']:.2f}")
-             if tx.get('net_amount'):
-                 print(f"  Net Amount: €{tx['net_amount']:.2f}")
+        for i, tx in enumerate(transactions, 1):
+            print(f"\nTransaction {i}:")
+            print(f"  ID: {tx['transaction_id']}")
+            print(f"  Type: {tx['kind']}")
+            print(f"  Status: {tx['status']}")
+            print(f"  Gateway: {tx['gateway']}")
+            print(f"  Created: {tx['created_at']}")
+            
+            # Show both USD and EUR amounts if conversion happened
+            if tx.get('gross_amount_usd') and tx.get('gross_amount_eur'):
+                print(f"  Gross Amount USD: ${tx['gross_amount_usd']:.2f}")
+                print(f"  Gross Amount EUR: €{tx['gross_amount_eur']:.2f}")
+                print(f"  Exchange Rate: {tx.get('exchange_rate', 0):.6f}")
+            else:
+                print(f"  Gross Amount: {tx.get('currency', 'USD')} {tx.get('gross_amount', 0):.2f}")
+            
+            # Fee breakdown matching Shopify's structure
+            if tx.get('shopify_payment_fee', 0) > 0:
+                print(f"  Shopify Payment Fee: €{tx['shopify_payment_fee']:.2f}")
+            if tx.get('shopify_payment_vat', 0) > 0:
+                print(f"  Shopify Payment VAT: €{tx['shopify_payment_vat']:.2f}")
+            if tx.get('currency_conversion_fee', 0) > 0:
+                print(f"  Currency Conversion Fee: €{tx['currency_conversion_fee']:.2f}")
+            if tx.get('currency_conversion_vat', 0) > 0:
+                print(f"  Currency Conversion VAT: €{tx['currency_conversion_vat']:.2f}")
+            if tx.get('transaction_fee', 0) > 0:
+                print(f"  Transaction Fee: €{tx['transaction_fee']:.2f}")
+            if tx.get('total_fees', 0) > 0:
+                print(f"  Total Fees: €{tx['total_fees']:.2f}")
+            if tx.get('net_amount', 0) > 0:
+                print(f"  Net Amount: €{tx['net_amount']:.2f}")
         
         print(f"\n✅ CROSS-CHECK THIS DATA WITH SHOPIFY APP:")
         print("=" * 50)
@@ -405,8 +356,7 @@ def main():
     
     if len(sys.argv) < 2:
         print("❌ Please provide an order number")
-        print("💡 Usage: python order_detailed_analyzer.py 1457")
-        print("💡 Usage: python order_detailed_analyzer.py #1457")
+        print("💡 Usage: python order_detailed_analyzer_fixed.py 1457")
         sys.exit(1)
     
     order_number = sys.argv[1]
@@ -414,7 +364,6 @@ def main():
     # Validate environment
     if not os.getenv('SHOPIFY_SHOP_URL') or not os.getenv('SHOPIFY_ACCESS_TOKEN'):
         print("❌ Shopify credentials not found in environment")
-        print("💡 Please set SHOPIFY_SHOP_URL and SHOPIFY_ACCESS_TOKEN")
         sys.exit(1)
     
     analyzer = OrderDetailedAnalyzer()

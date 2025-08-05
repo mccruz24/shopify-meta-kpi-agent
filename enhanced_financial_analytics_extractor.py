@@ -302,15 +302,14 @@ class EnhancedFinancialAnalyticsExtractor:
             gross_amount_eur = gross_amount_usd
             exchange_rate = 1.0
         
-        # Shopify Payment fee: 2.9% + €0.30 (calculated on EUR amount)
-        shopify_payment_fee = (gross_amount_eur * 0.029) + 0.30
+        # Shopify Payment fee: 2.9% + €0.25 (calculated on EUR amount)
+        shopify_payment_fee = (gross_amount_eur * 0.029) + 0.25
         
-        # Currency conversion fee: ~1.5-2% (varies, calculated from USD amount)
+        # Currency conversion fee: ~1.9% of EUR amount (varies by exchange rate)
         currency_conversion_fee = 0
         if currency != 'EUR':
-            # Based on your real data: $218.48 → €3.53 conversion fee
-            # That's about 1.62% of USD amount
-            currency_conversion_fee = gross_amount_usd * 0.0162
+            # Shopify charges approximately 1.9% of the EUR amount for currency conversion
+            currency_conversion_fee = gross_amount_eur * 0.019
         
         # No VAT on fees in your case (varies by country/setup)
         shopify_payment_vat = 0

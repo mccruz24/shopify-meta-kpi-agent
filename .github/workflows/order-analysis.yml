@@ -34,7 +34,7 @@ jobs:
         NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
       run: |
         echo "🔍 Analyzing Order #${{ github.event.inputs.order_number }}"
-        python order_detailed_analyzer.py "${{ github.event.inputs.order_number }}"
+        python order_detailed_analyzer_fixed.py "${{ github.event.inputs.order_number }}"
     
     - name: 📄 Upload order analysis report
       uses: actions/upload-artifact@v4
