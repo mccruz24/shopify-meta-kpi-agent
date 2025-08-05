@@ -11,6 +11,9 @@ from typing import Dict, List, Optional
 import json
 from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
+
 # Add project root to path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
@@ -21,6 +24,12 @@ class OrderDetailedAnalyzer:
     """Analyze specific orders in detail for cross-checking"""
     
     def __init__(self):
+        # Debug environment variables
+        shop_url = os.getenv('SHOPIFY_SHOP_URL')
+        access_token = os.getenv('SHOPIFY_ACCESS_TOKEN')
+        print(f"🔍 Debug: SHOPIFY_SHOP_URL = {shop_url}")
+        print(f"🔍 Debug: SHOPIFY_ACCESS_TOKEN = {'***' + access_token[-4:] if access_token else 'None'}")
+        
         self.extractor = EnhancedFinancialAnalyticsExtractor()
     
     def analyze_specific_order(self, order_number: str) -> Dict:
@@ -51,9 +60,9 @@ class OrderDetailedAnalyzer:
             enhanced_transactions = []
             for tx in transactions:
                 try:
-                    # Check if this is GraphQL data (has amountSet) or REST data
-                    if 'amountSet' in tx:
-                        enhanced_tx = self._process_graphql_transaction(tx, detailed_order)
+                    # Use GraphQL exchange rate data if available, otherwise use enhanced transaction processing
+                    if tx.get('_graphql_order_data'):
+                        enhanced_tx = self._process_transaction_with_graphql_exchange_rate(tx, detailed_order)
                     else:
                         enhanced_tx = self.extractor._enhance_transaction_with_fees(tx, detailed_order)
                     enhanced_transactions.append(enhanced_tx)
@@ -123,7 +132,7 @@ class OrderDetailedAnalyzer:
         
         print(f"📊 Fetching detailed order data using GraphQL...")
         
-        # Use GraphQL to get order with accurate financial data
+        # Use GraphQL to get order with multi-currency data for exchange rate
         query = """
         query getOrderDetails($id: ID!) {
           order(id: $id) {
@@ -140,31 +149,24 @@ class OrderDetailedAnalyzer:
                 currencyCode
               }
             }
-            transactions {
-              id
-              kind
-              status
-              gateway
-              createdAt
-              amountSet {
-                shopMoney {
-                  amount
-                  currencyCode
-                }
-                presentmentMoney {
-                  amount
-                  currencyCode
-                }
+            netPaymentSet {
+              shopMoney {
+                amount
+                currencyCode
               }
-              fees {
-                id
-                type
-                amountSet {
-                  shopMoney {
-                    amount
-                    currencyCode
-                  }
-                }
+              presentmentMoney {
+                amount
+                currencyCode
+              }
+            }
+            currentSubtotalPriceSet {
+              shopMoney {
+                amount
+                currencyCode
+              }
+              presentmentMoney {
+                amount
+                currencyCode
               }
             }
           }
@@ -174,7 +176,24 @@ class OrderDetailedAnalyzer:
         variables = {"id": f"gid://shopify/Order/{order_id}"}
         
         try:
+            # Check if GraphQL method exists
+            if not hasattr(self.extractor, '_make_graphql_request'):
+                print(f"⚠️  GraphQL method not available, using REST API...")
+                order_data = self.extractor._make_request(f'orders/{order_id}.json')
+                if order_data and 'order' in order_data:
+                    return order_data['order']
+                return {}
+            
+            print(f"🔄 Making GraphQL request for order {order_id}...")
             graphql_data = self.extractor._make_graphql_request(query, variables)
+            
+            print(f"🔍 GraphQL response received: {bool(graphql_data)}")
+            if graphql_data:
+                print(f"🔍 GraphQL data keys: {list(graphql_data.keys()) if isinstance(graphql_data, dict) else 'Not a dict'}")
+                if 'errors' in graphql_data:
+                    print(f"❌ GraphQL errors: {graphql_data['errors']}")
+                if 'data' in graphql_data:
+                    print(f"🔍 GraphQL data.order exists: {bool(graphql_data['data'].get('order'))}")
             
             if graphql_data and 'data' in graphql_data and graphql_data['data'].get('order'):
                 order = graphql_data['data']['order']
@@ -197,23 +216,10 @@ class OrderDetailedAnalyzer:
         return {}
     
     def _get_order_transactions(self, order_id: str, order_data: Dict = None) -> List[Dict]:
-        """Get all transactions for an order (preferring GraphQL data if available)"""
+        """Get all transactions for an order via REST API (GraphQL doesn't have transaction details)"""
         
-        print(f"💳 Processing order transactions...")
-        
-        # If we have GraphQL order data with transactions, use that first
-        if order_data and order_data.get('transactions'):
-            transactions = order_data['transactions']
-            capture_transactions = []
-            for tx in transactions:
-                if tx.get('kind') in ['capture', 'sale']:
-                    capture_transactions.append(tx)
-            
-            print(f"✅ Found {len(transactions)} total transactions from GraphQL, {len(capture_transactions)} capture/sale transactions")
-            return capture_transactions
-        
-        # Fallback to REST API
         print(f"💳 Fetching transactions via REST API...")
+        
         transactions_data = self.extractor._make_request(f'orders/{order_id}/transactions.json')
         
         if transactions_data and transactions_data.get('transactions'):
@@ -221,6 +227,9 @@ class OrderDetailedAnalyzer:
             capture_transactions = []
             for tx in transactions_data['transactions']:
                 if tx.get('kind') in ['capture', 'sale']:
+                    # Enhance transaction with GraphQL exchange rate data if available
+                    if order_data:
+                        tx['_graphql_order_data'] = order_data
                     capture_transactions.append(tx)
             
             print(f"✅ Found {len(transactions_data['transactions'])} total transactions, {len(capture_transactions)} capture/sale transactions")
@@ -228,6 +237,92 @@ class OrderDetailedAnalyzer:
         
         print(f"⚠️  No transactions found for order")
         return []
+    
+    def _process_transaction_with_graphql_exchange_rate(self, tx: Dict, order: Dict) -> Dict:
+        """Process REST transaction data enhanced with GraphQL exchange rate information"""
+        
+        print(f"   🔄 Processing transaction {tx.get('id', 'unknown')} with GraphQL exchange rates")
+        
+        # Get basic transaction data from REST API
+        gross_amount_usd = float(tx.get('amount', 0))
+        currency = tx.get('currency', 'USD')
+        
+        # Get GraphQL order data for exchange rates
+        graphql_order = tx.get('_graphql_order_data', {})
+        
+        # Extract exchange rate from GraphQL totalPriceSet
+        total_price_set = graphql_order.get('totalPriceSet', {})
+        shop_money = total_price_set.get('shopMoney', {})
+        presentment_money = total_price_set.get('presentmentMoney', {})
+        
+        # Calculate actual exchange rate from GraphQL data
+        if (shop_money.get('currencyCode') == 'EUR' and 
+            presentment_money.get('currencyCode') == 'USD'):
+            
+            total_usd = float(presentment_money.get('amount', 0))
+            total_eur = float(shop_money.get('amount', 0))
+            
+            if total_usd > 0:
+                # Use the actual exchange rate from the order
+                exchange_rate = total_eur / total_usd
+                gross_amount_eur = gross_amount_usd * exchange_rate
+                
+                print(f"   💱 Using GraphQL exchange rate: {exchange_rate:.6f}")
+                print(f"   💰 USD ${gross_amount_usd:.2f} → EUR €{gross_amount_eur:.2f}")
+            else:
+                # Fallback to basic calculation
+                exchange_rate = 0.85
+                gross_amount_eur = gross_amount_usd * exchange_rate
+                print(f"   ⚠️  Using fallback exchange rate: {exchange_rate:.6f}")
+        else:
+            # Fallback for non-multi-currency or missing data
+            exchange_rate = 0.85
+            gross_amount_eur = gross_amount_usd * exchange_rate
+            print(f"   ⚠️  Using fallback exchange rate: {exchange_rate:.6f}")
+        
+        # Calculate fees using your specific Shopify fee structure
+        shopify_payment_fee = (gross_amount_eur * 0.029) + 0.25
+        
+        # Currency conversion fee only if converting
+        currency_conversion_fee = 0
+        if currency != 'EUR' and gross_amount_usd != gross_amount_eur:
+            currency_conversion_fee = gross_amount_eur * 0.019
+        
+        # No VAT on fees in your setup
+        shopify_payment_vat = 0
+        currency_conversion_vat = 0
+        transaction_fee = 0
+        
+        total_fees = shopify_payment_fee + currency_conversion_fee
+        net_amount = gross_amount_eur - total_fees
+        
+        # Create enhanced transaction data
+        enhanced_tx = {
+            'transaction_id': str(tx.get('id', '')),
+            'order_id': str(order.get('id', '')),
+            'order_number': str(order.get('name', '')),
+            'created_at': str(tx.get('created_at', '')),
+            'kind': str(tx.get('kind', '')),
+            'status': str(tx.get('status', '')),
+            'gross_amount': gross_amount_usd,  # For backward compatibility
+            'gross_amount_usd': gross_amount_usd,
+            'gross_amount_eur': round(gross_amount_eur, 2),
+            'currency': str(currency),
+            'gateway': str(tx.get('gateway', 'unknown')),
+            'exchange_rate': round(exchange_rate, 6),
+            'shopify_payment_fee': round(shopify_payment_fee, 2),
+            'shopify_payment_vat': round(shopify_payment_vat, 2),
+            'currency_conversion_fee': round(currency_conversion_fee, 2),
+            'currency_conversion_vat': round(currency_conversion_vat, 2),
+            'transaction_fee': round(transaction_fee, 2),
+            'total_fees': round(total_fees, 2),
+            'net_amount': round(net_amount, 2),
+            'data_source': 'rest_api_with_graphql_exchange_rate'
+        }
+        
+        print(f"   ✅ Transaction processed with GraphQL exchange rate")
+        
+        return enhanced_tx
     
     def _process_graphql_transaction(self, tx: Dict, order: Dict) -> Dict:
         """Process GraphQL transaction data with accurate exchange rates and fees"""
