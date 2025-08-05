@@ -1,0 +1,51 @@
+name: Order Detailed Analysis
+
+on:
+  workflow_dispatch:
+    inputs:
+      order_number:
+        description: 'Order number to analyze (e.g., 1457 or #1457)'
+        required: true
+        default: '1457'
+        type: string
+
+jobs:
+  analyze-order:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 🛒 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 🐍 Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests python-dotenv pandas
+    
+    - name: 🔍 Run detailed order analysis
+      env:
+        SHOPIFY_SHOP_URL: ${{ secrets.SHOPIFY_SHOP_URL }}
+        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+        NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+      run: |
+        echo "🔍 Analyzing Order #${{ github.event.inputs.order_number }}"
+        python order_detailed_analyzer.py "${{ github.event.inputs.order_number }}"
+    
+    - name: 📄 Upload order analysis report
+      uses: actions/upload-artifact@v4
+      with:
+        name: order-analysis-${{ github.event.inputs.order_number }}
+        path: |
+          order_analysis_*.json
+        retention-days: 30
+    
+    - name: 📊 Display analysis summary
+      run: |
+        echo "✅ Order analysis completed!"
+        echo "📄 Analysis report has been uploaded as an artifact."
+        echo "🎯 Cross-check the displayed data with your Shopify app."
