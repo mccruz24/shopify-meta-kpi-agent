@@ -163,8 +163,14 @@ class OrderDetailedAnalyzer:
         transactions_data = self.extractor._make_request(f'orders/{order_id}/transactions.json')
         
         if transactions_data and transactions_data.get('transactions'):
-            print(f"✅ Found {len(transactions_data['transactions'])} transactions")
-            return transactions_data['transactions']
+            # Filter to only capture/sale transactions (not authorization)
+            capture_transactions = []
+            for tx in transactions_data['transactions']:
+                if tx.get('kind') in ['capture', 'sale']:
+                    capture_transactions.append(tx)
+            
+            print(f"✅ Found {len(transactions_data['transactions'])} total transactions, {len(capture_transactions)} capture/sale transactions")
+            return capture_transactions
         
         print(f"⚠️  No transactions found for order")
         return []
@@ -334,32 +340,37 @@ class OrderDetailedAnalyzer:
         print(f"Total Fees: {summary['total_fees']:.2f}")
         print(f"Net Payout: {summary['net_payout']:.2f}")
         
-        for i, tx in enumerate(transactions, 1):
-            print(f"\nTransaction {i}:")
-            print(f"  ID: {tx['transaction_id']}")
-            print(f"  Type: {tx['kind']}")
-            print(f"  Status: {tx['status']}")
-            print(f"  Gateway: {tx['gateway']}")
-            print(f"  Created: {tx['created_at']}")
-            print(f"  Gross Amount: {tx['currency']} {tx['gross_amount']:.2f}")
-            
-            if tx.get('shopify_payment_fee'):
-                print(f"  Shopify Payment Fee: €{tx['shopify_payment_fee']:.2f}")
-            if tx.get('currency_conversion_fee'):
-                print(f"  Currency Conversion Fee: €{tx['currency_conversion_fee']:.2f}")
-            if tx.get('transaction_fee'):
-                print(f"  Transaction Fee: €{tx['transaction_fee']:.2f}")
-            if tx.get('vat_on_fees'):
-                print(f"  VAT on Fees: €{tx['vat_on_fees']:.2f}")
-            if tx.get('total_fees'):
-                print(f"  Total Fees: €{tx['total_fees']:.2f}")
-            if tx.get('net_amount'):
-                print(f"  Net Amount: €{tx['net_amount']:.2f}")
-            
-            if tx.get('original_currency') and tx.get('converted_currency'):
-                print(f"  Currency Conversion:")
-                print(f"    {tx['original_currency']} {tx['original_amount']:.2f} → {tx['converted_currency']} {tx['converted_amount']:.2f}")
-                print(f"    Exchange Rate: {tx['exchange_rate']:.4f}")
+                          for i, tx in enumerate(transactions, 1):
+             print(f"\nTransaction {i}:")
+             print(f"  ID: {tx['transaction_id']}")
+             print(f"  Type: {tx['kind']}")
+             print(f"  Status: {tx['status']}")
+             print(f"  Gateway: {tx['gateway']}")
+             print(f"  Created: {tx['created_at']}")
+             
+             # Show both USD and EUR amounts if conversion happened
+             if tx.get('gross_amount_usd') and tx.get('gross_amount_eur'):
+                 print(f"  Gross Amount USD: ${tx['gross_amount_usd']:.2f}")
+                 print(f"  Gross Amount EUR: €{tx['gross_amount_eur']:.2f}")
+                 print(f"  Exchange Rate: {tx.get('exchange_rate', 0):.6f}")
+             else:
+                 print(f"  Gross Amount: {tx['currency']} {tx.get('gross_amount', 0):.2f}")
+             
+             # Fee breakdown matching Shopify's structure
+             if tx.get('shopify_payment_fee'):
+                 print(f"  Shopify Payment Fee: €{tx['shopify_payment_fee']:.2f}")
+             if tx.get('shopify_payment_vat'):
+                 print(f"  Shopify Payment VAT: €{tx['shopify_payment_vat']:.2f}")
+             if tx.get('currency_conversion_fee'):
+                 print(f"  Currency Conversion Fee: €{tx['currency_conversion_fee']:.2f}")
+             if tx.get('currency_conversion_vat'):
+                 print(f"  Currency Conversion VAT: €{tx['currency_conversion_vat']:.2f}")
+             if tx.get('transaction_fee'):
+                 print(f"  Transaction Fee: €{tx['transaction_fee']:.2f}")
+             if tx.get('total_fees'):
+                 print(f"  Total Fees: €{tx['total_fees']:.2f}")
+             if tx.get('net_amount'):
+                 print(f"  Net Amount: €{tx['net_amount']:.2f}")
         
         print(f"\n✅ CROSS-CHECK THIS DATA WITH SHOPIFY APP:")
         print("=" * 50)
