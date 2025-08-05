@@ -185,26 +185,18 @@ class EnhancedFinancialAnalyticsExtractor:
         }
     
     def _extract_settlement_analytics(self, date: datetime) -> Dict:
-        """Extract settlement analytics - actual payouts with detailed fees"""
+        """Extract settlement analytics using GraphQL and Shopify Payments APIs"""
         
-        print(f"   🏦 Settlement Analytics: Payouts for {date.strftime('%Y-%m-%d')}")
+        print(f"   🏦 Settlement Analytics: Using GraphQL for accurate financial data")
         
-        # Get payouts/disputes/balance transactions
-        # Note: This requires additional Shopify permissions
         try:
-            # Get balance transactions (payouts, fees, etc.)
-            balance_data = self._make_request('shopify_payments/balance/transactions.json', {
-                'payout_date': date.strftime('%Y-%m-%d')
-            })
-            
-            if balance_data and balance_data.get('transactions'):
-                return self._process_balance_transactions(balance_data['transactions'])
+            # Use GraphQL to get accurate financial data with exchange rates
+            return self._extract_graphql_financial_data(date)
             
         except Exception as e:
-            print(f"   ⚠️  Settlement data requires Shopify Payments API access: {e}")
-        
-        # Fallback: Estimate settlements from transactions
-        return self._estimate_settlements_from_transactions(date)
+            print(f"   ⚠️  GraphQL extraction failed: {e}")
+            # Fallback: Estimate settlements from transactions
+            return self._estimate_settlements_from_transactions(date)
     
     def _extract_detailed_fees(self, date: datetime) -> Dict:
         """Extract detailed fee breakdown per transaction"""
@@ -372,7 +364,14 @@ class EnhancedFinancialAnalyticsExtractor:
     def _get_eur_amount_from_shopify(self, transaction: Dict, usd_amount: float) -> Optional[float]:
         """Try to extract the actual EUR amount from Shopify's multi-currency fields"""
         
-        # Look for presentment currency fields
+        # Try GraphQL-style amountSet first (most accurate)
+        amount_set = transaction.get('amountSet', {})
+        if amount_set:
+            shop_money = amount_set.get('shopMoney', {})
+            if shop_money.get('currencyCode') == 'EUR':
+                return float(shop_money.get('amount', 0))
+        
+        # Look for presentment currency fields (REST API)
         presentment_amount = transaction.get('amount_set', {}).get('presentment_money', {}).get('amount')
         if presentment_amount:
             return float(presentment_amount)
@@ -407,6 +406,204 @@ class EnhancedFinancialAnalyticsExtractor:
         # Fallback to reasonable estimate if API fails
         # You can update this periodically or use your preferred rate source
         return 0.85  # Approximate USD to EUR rate
+    
+    def _extract_graphql_financial_data(self, date: datetime) -> Dict:
+        """Extract financial data using GraphQL Admin API for accurate exchange rates"""
+        
+        date_str = date.strftime('%Y-%m-%d')
+        print(f"   📊 Using GraphQL to get accurate financial data for {date_str}")
+        
+        # GraphQL query to get orders with detailed financial information
+        query = """
+        query getOrdersWithFinancialData($createdAtMin: DateTime!, $createdAtMax: DateTime!) {
+          orders(first: 50, query: $query, sortKey: CREATED_AT) {
+            edges {
+              node {
+                id
+                name
+                createdAt
+                totalPriceSet {
+                  shopMoney {
+                    amount
+                    currencyCode
+                  }
+                  presentmentMoney {
+                    amount
+                    currencyCode
+                  }
+                }
+                transactions {
+                  id
+                  kind
+                  status
+                  gateway
+                  createdAt
+                  amountSet {
+                    shopMoney {
+                      amount
+                      currencyCode
+                    }
+                    presentmentMoney {
+                      amount
+                      currencyCode
+                    }
+                  }
+                  fees {
+                    id
+                    type
+                    amountSet {
+                      shopMoney {
+                        amount
+                        currencyCode
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        """
+        
+        # Create date range
+        start_date = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = start_date + timedelta(days=1)
+        
+        variables = {
+            "query": f"created_at:>={start_date.isoformat()} created_at:<{end_date.isoformat()}",
+            "createdAtMin": start_date.isoformat(),
+            "createdAtMax": end_date.isoformat()
+        }
+        
+        try:
+            # Make GraphQL request
+            graphql_data = self._make_graphql_request(query, variables)
+            
+            if graphql_data and 'data' in graphql_data:
+                return self._process_graphql_response(graphql_data['data'])
+            else:
+                print(f"   ⚠️  No GraphQL data returned")
+                return {'status': 'no_data', 'note': 'GraphQL query returned no data'}
+                
+        except Exception as e:
+            print(f"   ❌ GraphQL request failed: {e}")
+            return {'status': 'error', 'note': f'GraphQL request failed: {e}'}
+    
+    def _make_graphql_request(self, query: str, variables: Dict = None) -> Optional[Dict]:
+        """Make GraphQL request to Shopify Admin API"""
+        
+        try:
+            import requests
+            
+            url = f"https://{self.shop_url}/admin/api/2023-10/graphql.json"
+            
+            payload = {
+                "query": query,
+                "variables": variables or {}
+            }
+            
+            headers = {
+                'X-Shopify-Access-Token': self.access_token,
+                'Content-Type': 'application/json'
+            }
+            
+            response = requests.post(url, json=payload, headers=headers)
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                print(f"   ❌ GraphQL error {response.status_code}: {response.text}")
+                return None
+                
+        except Exception as e:
+            print(f"   ❌ GraphQL request failed: {e}")
+            return None
+    
+    def _process_graphql_response(self, data: Dict) -> Dict:
+        """Process GraphQL response to extract financial data"""
+        
+        if not data.get('orders', {}).get('edges'):
+            return {'status': 'no_orders', 'note': 'No orders found for date'}
+        
+        orders = data['orders']['edges']
+        
+        financial_summary = {
+            'orders_count': len(orders),
+            'total_gross_amount': 0,
+            'total_shop_amount': 0,
+            'total_fees': 0,
+            'exchange_rates': {},
+            'transactions': []
+        }
+        
+        for order_edge in orders:
+            order = order_edge['node']
+            
+            # Process order financial data
+            total_price_set = order.get('totalPriceSet', {})
+            shop_money = total_price_set.get('shopMoney', {})
+            presentment_money = total_price_set.get('presentmentMoney', {})
+            
+            # Extract exchange rate if both currencies exist
+            if (shop_money.get('currencyCode') == 'EUR' and 
+                presentment_money.get('currencyCode') == 'USD'):
+                
+                usd_amount = float(presentment_money.get('amount', 0))
+                eur_amount = float(shop_money.get('amount', 0))
+                
+                if usd_amount > 0:
+                    exchange_rate = eur_amount / usd_amount
+                    financial_summary['exchange_rates'][order['name']] = {
+                        'usd_amount': usd_amount,
+                        'eur_amount': eur_amount,
+                        'exchange_rate': round(exchange_rate, 6)
+                    }
+            
+            # Process transactions
+            for transaction in order.get('transactions', []):
+                if transaction.get('kind') in ['capture', 'sale']:
+                    
+                    tx_amount_set = transaction.get('amountSet', {})
+                    tx_shop_money = tx_amount_set.get('shopMoney', {})
+                    tx_presentment_money = tx_amount_set.get('presentmentMoney', {})
+                    
+                    transaction_data = {
+                        'id': transaction.get('id'),
+                        'order_name': order.get('name'),
+                        'kind': transaction.get('kind'),
+                        'status': transaction.get('status'),
+                        'gateway': transaction.get('gateway'),
+                        'created_at': transaction.get('createdAt'),
+                        'shop_amount': float(tx_shop_money.get('amount', 0)),
+                        'shop_currency': tx_shop_money.get('currencyCode'),
+                        'presentment_amount': float(tx_presentment_money.get('amount', 0)),
+                        'presentment_currency': tx_presentment_money.get('currencyCode'),
+                        'fees': []
+                    }
+                    
+                    # Process fees if available
+                    for fee in transaction.get('fees', []):
+                        fee_amount_set = fee.get('amountSet', {})
+                        fee_shop_money = fee_amount_set.get('shopMoney', {})
+                        
+                        fee_data = {
+                            'id': fee.get('id'),
+                            'type': fee.get('type'),
+                            'amount': float(fee_shop_money.get('amount', 0)),
+                            'currency': fee_shop_money.get('currencyCode')
+                        }
+                        transaction_data['fees'].append(fee_data)
+                        financial_summary['total_fees'] += fee_data['amount']
+                    
+                    financial_summary['transactions'].append(transaction_data)
+                    financial_summary['total_gross_amount'] += transaction_data['presentment_amount']
+                    financial_summary['total_shop_amount'] += transaction_data['shop_amount']
+        
+        return {
+            'status': 'success',
+            'data': financial_summary,
+            'note': 'Extracted using GraphQL Admin API'
+        }
     
     def _process_balance_transactions(self, balance_transactions: List[Dict]) -> Dict:
         """Process Shopify balance transactions (requires Shopify Payments API)"""
