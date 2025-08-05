@@ -36,12 +36,21 @@ jobs:
         echo "🔍 Analyzing Order #${{ github.event.inputs.order_number }}"
         python order_detailed_analyzer_fixed.py "${{ github.event.inputs.order_number }}"
     
+    - name: 🔬 Check transaction API fields
+      env:
+        SHOPIFY_SHOP_URL: ${{ secrets.SHOPIFY_SHOP_URL }}
+        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+      run: |
+        echo "🔬 Checking available transaction API fields..."
+        python check_transaction_fields.py
+    
     - name: 📄 Upload order analysis report
       uses: actions/upload-artifact@v4
       with:
         name: order-analysis-${{ github.event.inputs.order_number }}
         path: |
           order_analysis_*.json
+          transaction_*_full_data.json
         retention-days: 30
     
     - name: 📊 Display analysis summary

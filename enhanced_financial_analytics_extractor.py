@@ -337,7 +337,7 @@ class EnhancedFinancialAnalyticsExtractor:
         }
     
     def _get_currency_conversion_details(self, transaction: Dict) -> Optional[Dict]:
-        """Get currency conversion details with real Shopify exchange rates"""
+        """Get currency conversion details using actual conversion data from Shopify"""
         
         gross_amount_usd = float(transaction.get('amount', 0))
         from_currency = transaction.get('currency', 'USD')
@@ -346,21 +346,67 @@ class EnhancedFinancialAnalyticsExtractor:
             return None
         
         if from_currency == 'USD':
-            # Use real Shopify exchange rate (as seen in your data)
-            # $218.48 → €186.04 gives rate of 0.851523
-            exchange_rate = 0.851523
-            converted_amount = gross_amount_usd * exchange_rate
+            # Try to get actual converted amount from Shopify's multi-currency data
+            # Shopify stores presentment currency amounts in shop currency fields
+            converted_amount = self._get_eur_amount_from_shopify(transaction, gross_amount_usd)
+            
+            if converted_amount:
+                # Calculate actual exchange rate from Shopify's conversion
+                exchange_rate = converted_amount / gross_amount_usd if gross_amount_usd > 0 else 0
+            else:
+                # Fallback: Fetch current exchange rate from ECB or use estimated rate
+                exchange_rate = self._get_current_exchange_rate('USD', 'EUR')
+                converted_amount = gross_amount_usd * exchange_rate
             
             return {
                 'original_amount': gross_amount_usd,
                 'original_currency': from_currency,
                 'converted_amount': round(converted_amount, 2),
                 'converted_currency': 'EUR',
-                'exchange_rate': exchange_rate,
+                'exchange_rate': round(exchange_rate, 6),
                 'conversion_date': transaction.get('created_at', '')
             }
         
         return None
+    
+    def _get_eur_amount_from_shopify(self, transaction: Dict, usd_amount: float) -> Optional[float]:
+        """Try to extract the actual EUR amount from Shopify's multi-currency fields"""
+        
+        # Look for presentment currency fields
+        presentment_amount = transaction.get('amount_set', {}).get('presentment_money', {}).get('amount')
+        if presentment_amount:
+            return float(presentment_amount)
+        
+        # Look for shop currency fields (if shop currency is EUR)
+        shop_amount = transaction.get('amount_set', {}).get('shop_money', {}).get('amount')
+        shop_currency = transaction.get('amount_set', {}).get('shop_money', {}).get('currency_code')
+        if shop_amount and shop_currency == 'EUR':
+            return float(shop_amount)
+        
+        # Check if there's a currency_exchange_rate field
+        if 'currency_exchange_rate' in transaction:
+            rate = float(transaction['currency_exchange_rate'])
+            return usd_amount * rate
+        
+        return None
+    
+    def _get_current_exchange_rate(self, from_currency: str, to_currency: str) -> float:
+        """Get current exchange rate (fallback method)"""
+        
+        # Try to fetch from European Central Bank API (free)
+        try:
+            import requests
+            response = requests.get('https://api.exchangerate-api.com/v4/latest/USD', timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                if 'EUR' in data.get('rates', {}):
+                    return data['rates']['EUR']
+        except Exception:
+            pass
+        
+        # Fallback to reasonable estimate if API fails
+        # You can update this periodically or use your preferred rate source
+        return 0.85  # Approximate USD to EUR rate
     
     def _process_balance_transactions(self, balance_transactions: List[Dict]) -> Dict:
         """Process Shopify balance transactions (requires Shopify Payments API)"""
