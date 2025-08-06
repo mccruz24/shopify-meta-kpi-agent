@@ -192,6 +192,41 @@ jobs:
           python printify_analytics_scheduler.py
         fi
 
+  # Step 6: Daily Platform Metrics (depends on printify-analytics)
+  daily-platform-metrics:
+    name: "6️⃣ Daily Platform Metrics Transform"
+    needs: printify-analytics
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run daily platform metrics transformation
+      env:
+        NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        NOTION_DAILY_KPIS_DB: ${{ secrets.NOTION_DAILY_KPIS_DB }}
+        NOTION_PLATFORM_METRICS_DB: ${{ secrets.NOTION_PLATFORM_METRICS_DB }}
+      run: |
+        if [ -n "${{ inputs.date }}" ]; then
+          echo "📊 Running Platform Metrics Transform for specific date: ${{ inputs.date }}"
+          python daily_platform_metrics_transformer.py "${{ inputs.date }}"
+        else
+          echo "📊 Running Platform Metrics Transform for yesterday (default)"
+          python daily_platform_metrics_transformer.py
+        fi
+
   # Summary job to report completion
   pipeline-summary:
     name: "📊 Pipeline Summary"

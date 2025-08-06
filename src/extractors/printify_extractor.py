@@ -208,16 +208,17 @@ class PrintifyExtractor:
         line_items = order.get('line_items', [])
         
         for item in line_items:
-            quantity = int(item.get('quantity', 1))
+            # NOTE: cost and shipping_cost fields already represent totals for the quantity
+            # No need to multiply by quantity as these are already line item totals
             
-            # Product cost (in cents)
-            product_cost = float(item.get('cost', 0)) / 100
+            # Product cost total (in cents) - already includes quantity
+            product_cost_total = float(item.get('cost', 0)) / 100
             
-            # Shipping cost for this item (in cents)
-            shipping_cost = float(item.get('shipping_cost', 0)) / 100
+            # Shipping cost total (in cents) - already includes quantity
+            shipping_cost_total = float(item.get('shipping_cost', 0)) / 100
             
-            # Calculate total item cost
-            item_total = (product_cost + shipping_cost) * quantity
+            # Calculate total item cost (no quantity multiplication needed)
+            item_total = product_cost_total + shipping_cost_total
             total_cost += item_total
         
         return total_cost

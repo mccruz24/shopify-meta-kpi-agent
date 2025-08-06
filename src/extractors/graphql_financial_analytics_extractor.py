@@ -6,18 +6,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-class FinancialAnalyticsExtractor:
-    """
-    Extract accurate financial analytics data using Shopify GraphQL API
-    
-    MAJOR IMPROVEMENT: Now uses GraphQL payout data instead of REST transaction estimates
-    
-    Key Benefits:
-    - Real settlement dates (not estimates)
-    - Actual processing fees (not 2.9% estimates)  
-    - Net amounts that actually hit bank account
-    - Complete financial data (no missing days)
-    """
+class GraphQLFinancialAnalyticsExtractor:
+    """Extract accurate financial analytics data using Shopify GraphQL API"""
     
     def __init__(self):
         self.shop_url = os.getenv('SHOPIFY_SHOP_URL')
@@ -27,7 +17,6 @@ class FinancialAnalyticsExtractor:
             'X-Shopify-Access-Token': self.access_token,
             'Content-Type': 'application/json'
         }
-        print("💡 Using new GraphQL-based financial analytics (accurate payout data)")
     
     def _execute_graphql_query(self, query: str, variables: Dict = None) -> Optional[Dict]:
         """Execute GraphQL query against Shopify API"""
@@ -57,13 +46,8 @@ class FinancialAnalyticsExtractor:
             print(f"❌ GraphQL request failed: {e}")
             return None
     
-    def extract_transactions_for_date_range(self, start_date: datetime, end_date: datetime = None) -> List[Dict]:
-        """
-        Extract financial transactions for a date range using GraphQL payouts
-        
-        BREAKING CHANGE: Now returns actual payout data instead of estimated transaction data
-        This provides real financial settlements vs transaction-level estimates
-        """
+    def get_payouts_for_date_range(self, start_date: datetime, end_date: datetime = None) -> List[Dict]:
+        """Get all payouts within a date range"""
         
         if end_date is None:
             end_date = start_date + timedelta(days=1)
@@ -139,7 +123,7 @@ class FinancialAnalyticsExtractor:
         }
         """
         
-        # Get comprehensive payout data
+        # Get more payouts to ensure we capture the date range
         result = self._execute_graphql_query(query, {"first": 100})
         
         if not result or not result.get('data'):
@@ -153,8 +137,8 @@ class FinancialAnalyticsExtractor:
             print("ℹ️  No payouts found")
             return []
         
-        # Filter payouts by date range and transform to transaction format
-        filtered_transactions = []
+        # Filter payouts by date range
+        filtered_payouts = []
         
         # Ensure start_date and end_date are timezone-aware
         if start_date.tzinfo is None:
@@ -168,15 +152,15 @@ class FinancialAnalyticsExtractor:
             
             # Check if payout falls within our date range
             if start_date <= issued_date <= end_date:
-                # Transform payout data into legacy transaction format (for compatibility)
-                transaction_data = self._transform_payout_to_transaction_format(payout)
-                filtered_transactions.append(transaction_data)
+                # Transform payout data into financial analytics format
+                payout_data = self._transform_payout_to_financial_data(payout)
+                filtered_payouts.append(payout_data)
         
-        print(f"✅ Successfully processed {len(filtered_transactions)} payout records")
-        return filtered_transactions
+        print(f"✅ Found {len(filtered_payouts)} payouts in date range")
+        return filtered_payouts
     
-    def _transform_payout_to_transaction_format(self, payout: Dict) -> Dict:
-        """Transform GraphQL payout data into legacy transaction format for compatibility"""
+    def _transform_payout_to_financial_data(self, payout: Dict) -> Dict:
+        """Transform GraphQL payout data into financial analytics format"""
         
         summary = payout['summary']
         issued_date = datetime.fromisoformat(payout['issuedAt'].replace('Z', '+00:00'))
@@ -195,70 +179,54 @@ class FinancialAnalyticsExtractor:
         # Calculate effective fee rate
         fee_rate = (processing_fee / gross_amount * 100) if gross_amount > 0 else 0
         
-        # Build transaction record in legacy format (for compatibility with existing code)
-        transaction_data = {
-            # Legacy fields (maintained for compatibility)
-            'transaction_id': f"payout_{payout['legacyResourceId']}",
-            'order_reference': f"payout_{payout['legacyResourceId']}",
-            'order_number': f"PAYOUT-{payout['legacyResourceId']}",
-            'date': issued_date.isoformat(),
-            'transaction_type': 'payout',  # Changed from 'sale'
-            'gross_amount': gross_amount,
-            'processing_fee': processing_fee,
-            'net_amount': net_amount,
-            'currency': summary['chargesGross']['currencyCode'],
-            'exchange_rate': 1.0,
-            'payment_method': 'shopify_payments',
-            'payment_gateway': 'shopify_payments',
-            'card_type': 'mixed',  # Payouts combine multiple payment methods
-            'last_4_digits': '',
-            'status': payout['status'].lower(),
-            'risk_level': 'low',  # Payouts are settled, low risk
-            'fraud_score': 0,
-            'avs_result': 'not_applicable',
-            'cvv_result': 'not_applicable',
-            'customer_country': 'mixed',  # Payouts combine multiple customers
-            'ip_country': 'mixed',
-            'device_type': 'mixed',
-            'browser': 'mixed',
-            'gateway_reference': payout['id'],
-            'authorization_code': '',
-            'settlement_date': issued_date.isoformat(),  # NOW ACCURATE!
-            'disputed': False,
-            
-            # NEW: Enhanced fields with actual payout data
+        # Build comprehensive financial record
+        financial_data = {
             'payout_id': payout['legacyResourceId'],
+            'settlement_date': issued_date.isoformat(),
             'settlement_date_formatted': issued_date.strftime('%Y-%m-%d'),
             'payout_status': payout['status'],
-            'transaction_type_detailed': payout['transactionType'],
+            'transaction_type': payout['transactionType'],
+            
+            # Core financial metrics (what actually matters for analytics)
+            'gross_sales': gross_amount,
+            'processing_fee': processing_fee,
+            'net_amount': net_amount,
             'fee_rate_percent': round(fee_rate, 2),
+            'currency': summary['chargesGross']['currencyCode'],
+            
+            # Refunds and adjustments
             'refunds_gross': refund_gross,
             'refunds_fee': refund_fee,
             'adjustments_gross': adjustment_gross,
             'adjustments_fee': adjustment_fee,
+            
+            # Additional fees
             'reserved_funds_fee': float(summary['reservedFundsFee']['amount']),
             'reserved_funds_gross': float(summary['reservedFundsGross']['amount']),
             'retried_payouts_fee': float(summary['retriedPayoutsFee']['amount']),
             'retried_payouts_gross': float(summary['retriedPayoutsGross']['amount']),
+            
+            # Metadata
             'data_source': 'graphql_payout',
             'extraction_timestamp': datetime.now().isoformat(),
             'payout_graphql_id': payout['id']
         }
         
-        return transaction_data
+        return financial_data
     
-    def extract_single_date(self, date: datetime = None) -> List[Dict]:
-        """Extract transactions for a single date (now using payout data)"""
+    def get_single_date_payouts(self, date: datetime = None) -> List[Dict]:
+        """Get payouts for a single date"""
         if date is None:
             date = datetime.now() - timedelta(days=1)
         
-        start_date = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        # Set date range for the entire day
+        start_date = date.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
         end_date = start_date + timedelta(days=1)
         
-        return self.extract_transactions_for_date_range(start_date, end_date)
+        return self.get_payouts_for_date_range(start_date, end_date)
     
     def get_payout_by_id(self, payout_id: str) -> Optional[Dict]:
-        """Get specific payout by ID (new functionality)"""
+        """Get specific payout by ID for detailed analysis"""
         
         graphql_id = f"gid://shopify/ShopifyPaymentsPayout/{payout_id}"
         
@@ -299,7 +267,45 @@ class FinancialAnalyticsExtractor:
             return None
         
         payout = result['data']['node']
-        return self._transform_payout_to_transaction_format(payout)
+        return self._transform_payout_to_financial_data(payout)
+    
+    def get_financial_summary_for_period(self, start_date: datetime, end_date: datetime = None) -> Dict:
+        """Get aggregated financial summary for a date period"""
+        
+        payouts = self.get_payouts_for_date_range(start_date, end_date)
+        
+        if not payouts:
+            return {
+                'total_payouts': 0,
+                'total_gross_sales': 0,
+                'total_processing_fees': 0,
+                'total_net_amount': 0,
+                'average_fee_rate': 0,
+                'total_refunds': 0,
+                'total_adjustments': 0,
+                'date_range': f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d') if end_date else start_date.strftime('%Y-%m-%d')}"
+            }
+        
+        # Calculate aggregated metrics
+        total_gross = sum(p['gross_sales'] for p in payouts)
+        total_fees = sum(p['processing_fee'] for p in payouts)
+        total_net = sum(p['net_amount'] for p in payouts)
+        total_refunds = sum(p['refunds_gross'] for p in payouts)
+        total_adjustments = sum(p['adjustments_gross'] for p in payouts)
+        
+        average_fee_rate = (total_fees / total_gross * 100) if total_gross > 0 else 0
+        
+        return {
+            'total_payouts': len(payouts),
+            'total_gross_sales': round(total_gross, 2),
+            'total_processing_fees': round(total_fees, 2),
+            'total_net_amount': round(total_net, 2),
+            'average_fee_rate': round(average_fee_rate, 2),
+            'total_refunds': round(total_refunds, 2),
+            'total_adjustments': round(total_adjustments, 2),
+            'date_range': f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d') if end_date else start_date.strftime('%Y-%m-%d')}",
+            'currency': payouts[0]['currency'] if payouts else 'EUR'
+        }
     
     def test_connection(self) -> bool:
         """Test GraphQL connection and payout access"""
@@ -327,7 +333,6 @@ class FinancialAnalyticsExtractor:
                 return True
             else:
                 print("❌ GraphQL payout connection failed")
-                print("   Check permissions for 'read_shopify_payments_payouts'")
                 return False
                 
         except Exception as e:

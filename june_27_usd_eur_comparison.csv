@@ -1,0 +1,4 @@
+Metric,USD_Amount,EUR_Amount,Exchange_Rate,Notes
+Order_Totals,$464.47,€464.47,1.0000,Sum_of_all_orders
+Payout_Amount,N/A,€405.61,N/A,Actual_settlement
+Difference,N/A,€58.86,N/A,Reconciliation_gap

@@ -1,0 +1,104 @@
+SHOPIFY FINANCIAL DATA SUMMARY
+================================================================================
+Export Date: 2025-08-06 09:54:43
+Total Payouts: 15
+Total Gross Sales: €4068.22
+Total Processing Fees: €203.26
+Total Net Amount: €3818.99
+Average Fee Rate: 5.15%
+
+================================================================================
+INDIVIDUAL PAYOUT DETAILS
+================================================================================
+
+1. PAYOUT #132285432155 - 2025-06-09
+   Status: PAID
+   Gross Sales: €89.63
+   Processing Fee: €4.80 (5.36%)
+   Net Amount: €84.83
+
+2. PAYOUT #132351000923 - 2025-06-10
+   Status: PAID
+   Gross Sales: €194.31
+   Processing Fee: €10.34 (5.32%)
+   Net Amount: €183.97
+
+3. PAYOUT #132420305243 - 2025-06-11
+   Status: PAID
+   Gross Sales: €765.94
+   Processing Fee: €30.50 (3.98%)
+   Net Amount: €735.44
+
+4. PAYOUT #132493410651 - 2025-06-12
+   Status: PAID
+   Gross Sales: €125.96
+   Processing Fee: €6.79 (5.39%)
+   Net Amount: €73.20
+   Adjustments: €-30.97 (fee: €15.00)
+
+5. PAYOUT #132552163675 - 2025-06-13
+   Status: PAID
+   Gross Sales: €178.16
+   Processing Fee: €9.30 (5.22%)
+   Net Amount: €168.86
+
+6. PAYOUT #132601479515 - 2025-06-16
+   Status: PAID
+   Gross Sales: €199.49
+   Processing Fee: €10.06 (5.04%)
+   Net Amount: €189.43
+
+7. PAYOUT #132688707931 - 2025-06-17
+   Status: PAID
+   Gross Sales: €215.83
+   Processing Fee: €11.12 (5.15%)
+   Net Amount: €204.71
+
+8. PAYOUT #132763091291 - 2025-06-18
+   Status: PAID
+   Gross Sales: €477.01
+   Processing Fee: €24.89 (5.22%)
+   Net Amount: €452.12
+
+9. PAYOUT #132832133467 - 2025-06-19
+   Status: PAID
+   Gross Sales: €52.60
+   Processing Fee: €2.77 (5.27%)
+   Net Amount: €49.83
+
+10. PAYOUT #132892524891 - 2025-06-20
+   Status: PAID
+   Gross Sales: €208.53
+   Processing Fee: €11.52 (5.52%)
+   Net Amount: €197.01
+
+11. PAYOUT #132967629147 - 2025-06-23
+   Status: PAID
+   Gross Sales: €139.32
+   Processing Fee: €7.70 (5.53%)
+   Net Amount: €131.62
+
+12. PAYOUT #133066326363 - 2025-06-24
+   Status: PAID
+   Gross Sales: €242.82
+   Processing Fee: €12.87 (5.30%)
+   Net Amount: €229.95
+
+13. PAYOUT #133105779035 - 2025-06-25
+   Status: PAID
+   Gross Sales: €741.88
+   Processing Fee: €38.29 (5.16%)
+   Net Amount: €703.59
+
+14. PAYOUT #133151523163 - 2025-06-26
+   Status: PAID
+   Gross Sales: €31.13
+   Processing Fee: €1.44 (4.63%)
+   Net Amount: €29.69
+
+15. PAYOUT #133241995611 - 2025-06-27
+   Status: PAID
+   Gross Sales: €405.61
+   Processing Fee: €20.87 (5.15%)
+   Net Amount: €384.74
+

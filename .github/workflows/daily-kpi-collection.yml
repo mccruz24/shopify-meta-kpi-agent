@@ -1,11 +1,11 @@
 name: Daily KPI Collection
 
 on:
-  # Run every day at 9:00 AM UTC (11:00 AM CET)
-  schedule:
-    - cron: '0 9 * * *'
+  # Disabled automatic schedule (now runs via complete-analytics-pipeline.yml)
+  # schedule:
+  #   - cron: '0 9 * * *'
   
-  # Allow manual triggering
+  # Allow manual triggering only
   workflow_dispatch:
     inputs:
       date:
