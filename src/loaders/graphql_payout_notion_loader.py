@@ -1,13 +1,13 @@
 import os
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
 
 load_dotenv()
 
-class PayoutNotionLoader:
-    """Load payout analytics data into Notion database with daily granularity"""
+class GraphQLPayoutNotionLoader:
+    """Load GraphQL payout analytics data into Notion database with comprehensive financial breakdown"""
     
     def __init__(self):
         self.notion_token = os.getenv('NOTION_TOKEN')
@@ -18,7 +18,7 @@ class PayoutNotionLoader:
             "Content-Type": "application/json",
             "Notion-Version": "2022-06-28"
         }
-        print("💰 Payout Notion Loader: Daily payout granularity with gross/net breakdown")
+        print("💰 GraphQL Payout Notion Loader: Comprehensive payout analytics with detailed fee breakdown")
     
     def _make_notion_request(self, method: str, endpoint: str, data: Dict = None) -> Optional[Dict]:
         """Make request to Notion API"""
@@ -78,17 +78,25 @@ class PayoutNotionLoader:
             return datetime.now().date().isoformat()
     
     def _create_payout_notion_properties(self, payout_data: Dict) -> Dict:
-        """Create Notion properties from payout data with enhanced financial breakdown"""
+        """Create Notion properties from GraphQL payout data with comprehensive financial breakdown"""
         
         # Helper function to safely create select fields
         def safe_select(value, default='Unknown'):
             return {"select": {"name": str(value) if value is not None else default}}
         
-        # Calculate derived metrics
-        gross_amount = float(payout_data.get('gross_amount', 0))
+        # Helper function to safely create rich text fields
+        def safe_rich_text(value):
+            return {"rich_text": [{"text": {"content": str(value) if value is not None else ""}}]}
+        
+        # Extract financial amounts with safe defaults
+        gross_sales = float(payout_data.get('gross_sales', 0))
         processing_fee = float(payout_data.get('processing_fee', 0))
         net_amount = float(payout_data.get('net_amount', 0))
-        fee_rate = float(payout_data.get('fee_rate_percent', 0))
+        fee_rate_percent = float(payout_data.get('fee_rate_percent', 0))
+        
+        # Extract detailed fee breakdowns
+        refunds_gross = float(payout_data.get('refunds_gross', 0))
+        refunds_fee = float(payout_data.get('refunds_fee', 0))
         
         properties = {
             # Primary identifiers
@@ -99,54 +107,42 @@ class PayoutNotionLoader:
                 "date": {"start": self._format_date(payout_data.get('settlement_date', ''))}
             },
             
-            # Financial breakdown (main focus)
-            "Gross Amount": {
-                "number": round(gross_amount, 2)
+            # Core financial metrics (main focus)
+            "Gross Sales": {
+                "number": round(gross_sales, 2)
             },
             "Processing Fee": {
                 "number": round(processing_fee, 2)
             },
-            "Net Amount (Bank)": {
+            "Net Amount": {
                 "number": round(net_amount, 2)
             },
             "Fee Rate %": {
-                "number": round(fee_rate, 2)
+                "number": round(fee_rate_percent, 2)
             },
             
             # Currency and status
             "Currency": safe_select(payout_data.get('currency'), 'EUR'),
             "Payout Status": safe_select(payout_data.get('payout_status'), 'paid'),
-            "Transaction Type": safe_select(payout_data.get('transaction_type_detailed'), 'payout'),
+            "Transaction Type": safe_select(payout_data.get('transaction_type'), 'DEPOSIT'),
             
-            # Additional financial details
+            # Detailed fee breakdowns (GraphQL advantage)
             "Refunds Gross": {
-                "number": round(float(payout_data.get('refunds_gross', 0)), 2)
+                "number": round(refunds_gross, 2)
             },
             "Refunds Fee": {
-                "number": round(float(payout_data.get('refunds_fee', 0)), 2)
-            },
-            "Adjustments Gross": {
-                "number": round(float(payout_data.get('adjustments_gross', 0)), 2)
-            },
-            "Adjustments Fee": {
-                "number": round(float(payout_data.get('adjustments_fee', 0)), 2)
-            },
-            
-            # Reserved funds
-            "Reserved Funds Gross": {
-                "number": round(float(payout_data.get('reserved_funds_gross', 0)), 2)
-            },
-            "Reserved Funds Fee": {
-                "number": round(float(payout_data.get('reserved_funds_fee', 0)), 2)
+                "number": round(refunds_fee, 2)
             },
             
             # Metadata
-            "Data Source": safe_select(payout_data.get('data_source'), 'graphql_payout'),
-            "Extraction Date": {
+            "Extraction Timestamp": {
                 "date": {"start": datetime.now().date().isoformat()}
             },
-            "GraphQL ID": {
-                "rich_text": [{"text": {"content": str(payout_data.get('payout_graphql_id', ''))}}]
+            "GraphQL ID": safe_rich_text(payout_data.get('payout_graphql_id', '')),
+            
+            # Calculated fields for analysis
+            "Total Fees": {
+                "number": round(processing_fee + refunds_fee, 2)
             }
         }
         
@@ -174,13 +170,13 @@ class PayoutNotionLoader:
             result = self._make_notion_request('POST', 'pages', page_data)
             
             if result:
-                settlement_date = payout_data.get('settlement_date_formatted', 'Unknown')
-                gross_amount = payout_data.get('gross_amount', 0)
+                settlement_date = payout_data.get('settlement_date', 'Unknown')
+                gross_sales = payout_data.get('gross_sales', 0)
                 net_amount = payout_data.get('net_amount', 0)
                 currency = payout_data.get('currency', 'EUR')
                 
                 print(f"✅ Added payout {payout_id} for {settlement_date}")
-                print(f"   💰 Gross: {currency}{gross_amount:.2f} → Net: {currency}{net_amount:.2f}")
+                print(f"   💰 Gross: {currency}{gross_sales:.2f} → Net: {currency}{net_amount:.2f}")
                 return True
             else:
                 print(f"❌ Failed to add payout {payout_id} to Notion")
@@ -192,7 +188,7 @@ class PayoutNotionLoader:
     
     def load_payouts_batch(self, payouts_data: List[Dict], skip_if_exists: bool = True) -> Dict:
         """Load multiple payouts into Notion"""
-        print(f"💰 Loading {len(payouts_data)} payouts into Notion...")
+        print(f"💰 Loading {len(payouts_data)} GraphQL payouts into Notion...")
         
         successful = 0
         failed = 0
@@ -202,6 +198,8 @@ class PayoutNotionLoader:
         total_gross = 0
         total_fees = 0
         total_net = 0
+        total_refunds = 0
+        total_adjustments = 0
         currency = payouts_data[0].get('currency', 'EUR') if payouts_data else 'EUR'
         
         for i, payout_data in enumerate(payouts_data, 1):
@@ -219,14 +217,16 @@ class PayoutNotionLoader:
                 if success:
                     successful += 1
                     # Add to totals
-                    total_gross += float(payout_data.get('gross_amount', 0))
+                    total_gross += float(payout_data.get('gross_sales', 0))
                     total_fees += float(payout_data.get('processing_fee', 0))
                     total_net += float(payout_data.get('net_amount', 0))
+                    total_refunds += float(payout_data.get('refunds_gross', 0))
+                    total_adjustments += float(payout_data.get('adjustments_gross', 0))
                 else:
                     failed += 1
                 
                 # Small delay to avoid rate limits
-                if i % 5 == 0:  # Every 5 requests (more conservative for payouts)
+                if i % 5 == 0:  # Every 5 requests
                     import time
                     time.sleep(1)
                     
@@ -242,10 +242,12 @@ class PayoutNotionLoader:
             'total_gross': total_gross,
             'total_fees': total_fees,
             'total_net': total_net,
+            'total_refunds': total_refunds,
+            'total_adjustments': total_adjustments,
             'currency': currency
         }
         
-        print(f"\n🎉 Payout loading completed!")
+        print(f"\n🎉 GraphQL Payout loading completed!")
         print(f"   ✅ Successfully loaded: {successful}")
         print(f"   ⏭️  Skipped (existing): {skipped}")
         print(f"   ❌ Failed: {failed}")
@@ -253,9 +255,11 @@ class PayoutNotionLoader:
         
         if successful > 0:
             print(f"\n💰 Financial Summary:")
-            print(f"   Gross Amount: {currency}{total_gross:.2f}")
+            print(f"   Gross Sales: {currency}{total_gross:.2f}")
             print(f"   Processing Fees: {currency}{total_fees:.2f}")
-            print(f"   Net Amount (Bank): {currency}{total_net:.2f}")
+            print(f"   Net Amount: {currency}{total_net:.2f}")
+            print(f"   Total Refunds: {currency}{total_refunds:.2f}")
+            print(f"   Total Adjustments: {currency}{total_adjustments:.2f}")
             print(f"   Average Fee Rate: {(total_fees/total_gross*100):.2f}%" if total_gross > 0 else "   Average Fee Rate: 0%")
         
         return results
@@ -265,13 +269,13 @@ class PayoutNotionLoader:
         try:
             result = self._make_notion_request('GET', f'databases/{self.financial_db_id}')
             if result and result.get('id'):
-                print("✅ Notion payout database connection successful")
+                print("✅ Notion GraphQL payout database connection successful")
                 return True
             else:
-                print("❌ Notion payout database connection failed")
+                print("❌ Notion GraphQL payout database connection failed")
                 return False
         except Exception as e:
-            print(f"❌ Notion payout connection test failed: {e}")
+            print(f"❌ Notion GraphQL payout connection test failed: {e}")
             return False
     
     def get_recent_payouts(self, days_back: int = 7) -> List[Dict]:
@@ -304,16 +308,18 @@ class PayoutNotionLoader:
                         'notion_id': page['id'],
                         'payout_id': props.get('Payout ID', {}).get('title', [{}])[0].get('text', {}).get('content', ''),
                         'settlement_date': props.get('Settlement Date', {}).get('date', {}).get('start', ''),
-                        'gross_amount': props.get('Gross Amount', {}).get('number', 0),
-                        'net_amount': props.get('Net Amount (Bank)', {}).get('number', 0),
-                        'currency': props.get('Currency', {}).get('select', {}).get('name', 'EUR')
+                        'gross_sales': props.get('Gross Sales', {}).get('number', 0),
+                        'net_amount': props.get('Net Amount', {}).get('number', 0),
+                        'currency': props.get('Currency', {}).get('select', {}).get('name', 'EUR'),
+                        'payout_status': props.get('Payout Status', {}).get('select', {}).get('name', 'Unknown'),
+                        'transaction_type': props.get('Transaction Type', {}).get('select', {}).get('name', 'Unknown')
                     }
                     payouts.append(payout_info)
                 
-                print(f"📊 Found {len(payouts)} recent payouts in Notion")
+                print(f"📊 Found {len(payouts)} recent GraphQL payouts in Notion")
                 return payouts
             
             return []
         except Exception as e:
             print(f"❌ Error getting recent payouts: {e}")
-            return []
+            return [] 

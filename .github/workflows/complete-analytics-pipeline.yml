@@ -46,10 +46,10 @@ jobs:
       run: |
         if [ -n "${{ inputs.date }}" ]; then
           echo "🎯 Running Daily KPI for specific date: ${{ inputs.date }}"
-          python daily_kpi_scheduler.py "${{ inputs.date }}"
+          python schedulers/daily_kpi_scheduler.py "${{ inputs.date }}"
         else
           echo "🎯 Running Daily KPI for yesterday (default)"
-          python daily_kpi_scheduler.py
+          python schedulers/daily_kpi_scheduler.py
         fi
 
   # Step 2: Orders Analytics (depends on daily-kpi)
@@ -81,10 +81,10 @@ jobs:
       run: |
         if [ -n "${{ inputs.date }}" ]; then
           echo "📦 Running Orders Analytics for specific date: ${{ inputs.date }}"
-          python orders_analytics_scheduler.py "${{ inputs.date }}"
+          python schedulers/orders_analytics_scheduler.py "${{ inputs.date }}"
         else
           echo "📦 Running Orders Analytics for yesterday (default)"
-          python orders_analytics_scheduler.py
+          python schedulers/orders_analytics_scheduler.py
         fi
 
   # Step 3: Financial Analytics (depends on orders-analytics)
@@ -116,10 +116,10 @@ jobs:
       run: |
         if [ -n "${{ inputs.date }}" ]; then
           echo "💰 Running Financial Analytics for specific date: ${{ inputs.date }}"
-          python financial_analytics_scheduler.py "${{ inputs.date }}"
+          python schedulers/financial_analytics_scheduler.py "${{ inputs.date }}"
         else
           echo "💰 Running Financial Analytics for yesterday (default)"
-          python financial_analytics_scheduler.py
+          python schedulers/financial_analytics_scheduler.py
         fi
 
   # Step 4: Traffic Analytics (depends on financial-analytics)
@@ -151,10 +151,10 @@ jobs:
       run: |
         if [ -n "${{ inputs.date }}" ]; then
           echo "🚗 Running Traffic Analytics for specific date: ${{ inputs.date }}"
-          python traffic_analytics_scheduler.py "${{ inputs.date }}"
+          python schedulers/traffic_analytics_scheduler.py "${{ inputs.date }}"
         else
           echo "🚗 Running Traffic Analytics for yesterday (default)"
-          python traffic_analytics_scheduler.py
+          python schedulers/traffic_analytics_scheduler.py
         fi
 
   # Step 5: Printify Analytics (depends on traffic-analytics)
@@ -186,10 +186,10 @@ jobs:
       run: |
         if [ -n "${{ inputs.date }}" ]; then
           echo "🖨️ Running Printify Analytics for specific date: ${{ inputs.date }}"
-          python printify_analytics_scheduler.py "${{ inputs.date }}"
+          python schedulers/printify_analytics_scheduler.py "${{ inputs.date }}"
         else
           echo "🖨️ Running Printify Analytics for yesterday (default)"
-          python printify_analytics_scheduler.py
+          python schedulers/printify_analytics_scheduler.py
         fi
 
   # Step 6: Daily Platform Metrics (depends on printify-analytics)
@@ -221,10 +221,10 @@ jobs:
       run: |
         if [ -n "${{ inputs.date }}" ]; then
           echo "📊 Running Platform Metrics Transform for specific date: ${{ inputs.date }}"
-          python daily_platform_metrics_transformer.py "${{ inputs.date }}"
+          python schedulers/daily_platform_metrics_transformer.py "${{ inputs.date }}"
         else
           echo "📊 Running Platform Metrics Transform for yesterday (default)"
-          python daily_platform_metrics_transformer.py
+          python schedulers/daily_platform_metrics_transformer.py
         fi
 
   # Summary job to report completion

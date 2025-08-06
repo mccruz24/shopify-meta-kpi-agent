@@ -1,8 +1,0 @@
-order_number,order_id,created_date_formatted,customer_currency,customer_total,customer_subtotal,customer_tax,customer_shipping,shop_currency,shop_total,shop_subtotal,shop_tax,shop_shipping,exchange_rate,conversion_date,customer_email,customer_country,payment_gateway,mapped_payout_id
-1232,6814280450395,2025-06-26,USD,113.6,113.6,0.0,0.0,USD,113.6,113.6,0.0,0.0,1.0,2025-06-26,josejuan.casimirorios@gmail.com,United States,shopify_payments,133241995611
-1233,6815629050203,2025-06-26,USD,35.77,30.9,0.0,4.87,USD,35.77,30.9,0.0,4.87,1.0,2025-06-26,ncostanzo64@yahoo.com,United States,shopify_payments,133241995611
-1234,6815885427035,2025-06-26,USD,63.67,58.8,0.0,4.87,USD,63.67,58.8,0.0,4.87,1.0,2025-06-26,steven@stevenfinch.com,United States,shopify_payments,133241995611
-1224,6812030763355,2025-06-25,USD,34.77,29.9,0.0,4.87,USD,34.77,29.9,0.0,4.87,1.0,2025-06-25,seanpperry@aol.com,United States,shopify_payments,133241995611
-1225,6812150563163,2025-06-25,USD,147.12,147.12,0.0,0.0,USD,147.12,147.12,0.0,0.0,1.0,2025-06-25,kushwahaprachi@gmail.com,United States,shopify_payments,133241995611
-1226,6813342728539,2025-06-25,USD,34.77,29.9,0.0,4.87,USD,34.77,29.9,0.0,4.87,1.0,2025-06-25,sschamber2@yahoo.com,United States,shopify_payments,133241995611
-1227,6813402595675,2025-06-25,USD,34.77,29.9,0.0,4.87,USD,34.77,29.9,0.0,4.87,1.0,2025-06-25,kartikarunapuram@gmail.com,United States,shopify_payments,133241995611

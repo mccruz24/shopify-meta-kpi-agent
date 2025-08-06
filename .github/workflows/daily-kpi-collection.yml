@@ -52,10 +52,10 @@ jobs:
       run: |
         if [ -n "${{ inputs.date }}" ]; then
           echo "Running for specific date: ${{ inputs.date }}"
-          python daily_kpi_scheduler.py "${{ inputs.date }}"
+          python schedulers/daily_kpi_scheduler.py "${{ inputs.date }}"
         else
           echo "Running for yesterday (default)"
-          python daily_kpi_scheduler.py
+          python schedulers/daily_kpi_scheduler.py
         fi
     
     - name: Upload logs on failure

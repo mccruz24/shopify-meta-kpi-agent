@@ -11,7 +11,7 @@ from typing import Dict
 import time
 
 # Add project root to path
-current_dir = os.path.dirname(os.path.abspath(__file__))
+current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(current_dir)
 
 from src.extractors.orders_analytics_extractor import OrdersAnalyticsExtractor
@@ -164,4 +164,4 @@ def main():
         sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
-    main()
+    main() 

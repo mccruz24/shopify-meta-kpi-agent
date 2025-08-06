@@ -12,7 +12,7 @@ import time
 import random
 
 # Add project root to path
-current_dir = os.path.dirname(os.path.abspath(__file__))
+current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(current_dir)
 
 from src.extractors.shopify_extractor import ShopifyExtractor

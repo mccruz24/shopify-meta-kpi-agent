@@ -57,7 +57,6 @@ class ShopifyExtractor:
         
         orders_data = self._make_request('orders.json', {
             'status': 'any',
-            'financial_status': 'paid',
             'created_at_min': start_date.isoformat(),
             'created_at_max': end_date.isoformat(),
             'limit': 250
@@ -120,7 +119,6 @@ class ShopifyExtractor:
             previous_orders = self._make_request('orders.json', {
                 'customer_id': customer_id,
                 'status': 'any',
-                'financial_status': 'paid',
                 'created_at_max': start_date.isoformat(),
                 'limit': 1
             })

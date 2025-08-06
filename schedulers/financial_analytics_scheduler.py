@@ -12,19 +12,19 @@ from typing import Dict
 import time
 
 # Add project root to path
-current_dir = os.path.dirname(os.path.abspath(__file__))
+current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(current_dir)
 
-from src.extractors.financial_analytics_extractor import FinancialAnalyticsExtractor
-from src.loaders.payout_notion_loader import PayoutNotionLoader
+from src.extractors.graphql_financial_analytics_extractor import GraphQLFinancialAnalyticsExtractor
+from src.loaders.graphql_payout_notion_loader import GraphQLPayoutNotionLoader
 
 class FinancialAnalyticsScheduler:
     """Automated daily payout analytics collection for scheduled runs"""
     
     def __init__(self):
         # Initialize extractors and loaders for payout data
-        self.extractor = FinancialAnalyticsExtractor()
-        self.loader = PayoutNotionLoader()
+        self.extractor = GraphQLFinancialAnalyticsExtractor()
+        self.loader = GraphQLPayoutNotionLoader()
     
     def collect_daily_payouts(self, target_date: datetime = None) -> bool:
         """Collect and store daily payout data for the target date"""
@@ -39,7 +39,7 @@ class FinancialAnalyticsScheduler:
         try:
             # Extract payout data from Shopify (GraphQL)
             print(f"   💰 Extracting payouts from Shopify GraphQL...")
-            payout_data = self.extractor.extract_single_date(target_date)
+            payout_data = self.extractor.get_single_date_payouts(target_date)
             
             if not payout_data:
                 print(f"   ℹ️  No payouts found for {date_str}")
@@ -57,7 +57,7 @@ class FinancialAnalyticsScheduler:
             failed = results['failed']
             
             # Calculate payout summary metrics
-            total_gross = sum(po.get('gross_amount', 0) for po in payout_data)
+            total_gross = sum(po.get('gross_sales', 0) for po in payout_data)
             total_fees = sum(po.get('processing_fee', 0) for po in payout_data)
             total_net = sum(po.get('net_amount', 0) for po in payout_data)
             total_payouts = len(payout_data)
@@ -107,7 +107,7 @@ class FinancialAnalyticsScheduler:
         # Test payout data extraction
         print("3️⃣ Testing payout data extraction...")
         test_date = datetime.now() - timedelta(days=7)  # Look back further for payouts
-        payout_data = self.extractor.extract_single_date(test_date)
+        payout_data = self.extractor.get_single_date_payouts(test_date)
         
         if payout_data:
             print(f"   ✅ Successfully extracted {len(payout_data)} payouts")
@@ -118,8 +118,8 @@ class FinancialAnalyticsScheduler:
                 currency = sample.get('currency', 'EUR')
                 print(f"   💰 Sample payout:")
                 print(f"        Payout ID: {sample.get('payout_id', 'unknown')}")
-                print(f"        Settlement Date: {sample.get('settlement_date_formatted', 'unknown')}")
-                print(f"        Gross: {currency}{sample.get('gross_amount', 0):.2f}")
+                print(f"        Settlement Date: {sample.get('settlement_date', 'unknown')}")
+                print(f"        Gross: {currency}{sample.get('gross_sales', 0):.2f}")
                 print(f"        Fee: {currency}{sample.get('processing_fee', 0):.2f}")
                 print(f"        Net (Bank): {currency}{sample.get('net_amount', 0):.2f}")
                 print(f"        Status: {sample.get('payout_status', 'unknown')}")
@@ -179,4 +179,4 @@ def main():
         sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
-    main()
+    main() 

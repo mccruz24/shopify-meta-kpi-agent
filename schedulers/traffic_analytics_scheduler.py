@@ -11,7 +11,7 @@ import logging
 from typing import Dict
 
 # Add project root to path
-current_dir = os.path.dirname(os.path.abspath(__file__))
+current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(current_dir)
 
 from traffic_analytics_sync import TrafficAnalyticsSync
@@ -76,4 +76,4 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    main() 
