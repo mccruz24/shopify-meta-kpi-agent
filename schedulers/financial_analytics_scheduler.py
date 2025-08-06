@@ -57,7 +57,7 @@ class FinancialAnalyticsScheduler:
             failed = results['failed']
             
             # Calculate payout summary metrics
-            total_gross = sum(po.get('gross_sales', 0) for po in payout_data)
+            total_gross = sum(po.get('gross_amount', 0) for po in payout_data)
             total_fees = sum(po.get('processing_fee', 0) for po in payout_data)
             total_net = sum(po.get('net_amount', 0) for po in payout_data)
             total_payouts = len(payout_data)
@@ -118,8 +118,8 @@ class FinancialAnalyticsScheduler:
                 currency = sample.get('currency', 'EUR')
                 print(f"   💰 Sample payout:")
                 print(f"        Payout ID: {sample.get('payout_id', 'unknown')}")
-                print(f"        Settlement Date: {sample.get('settlement_date', 'unknown')}")
-                print(f"        Gross: {currency}{sample.get('gross_sales', 0):.2f}")
+                print(f"        Settlement Date: {sample.get('settlement_date_formatted', 'unknown')}")
+                print(f"        Gross: {currency}{sample.get('gross_amount', 0):.2f}")
                 print(f"        Fee: {currency}{sample.get('processing_fee', 0):.2f}")
                 print(f"        Net (Bank): {currency}{sample.get('net_amount', 0):.2f}")
                 print(f"        Status: {sample.get('payout_status', 'unknown')}")

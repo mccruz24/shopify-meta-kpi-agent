@@ -17,7 +17,7 @@ sys.path.append(current_dir)
 
 from src.extractors.shopify_extractor import ShopifyExtractor
 from src.extractors.meta_extractor import MetaExtractor
-from src.extractors.printify_extractor import PrintifyExtractor
+from src.extractors.printify_analytics_extractor import PrintifyAnalyticsExtractor
 
 class DailyKPIScheduler:
     """Automated daily KPI collection for scheduled runs"""
@@ -35,7 +35,7 @@ class DailyKPIScheduler:
         # API extractors
         self.shopify = ShopifyExtractor()
         self.meta = MetaExtractor()
-        self.printify = PrintifyExtractor()
+        self.printify = PrintifyAnalyticsExtractor()
     
     def check_date_exists(self, date: datetime) -> bool:
         """Check if date already exists in Notion database"""
