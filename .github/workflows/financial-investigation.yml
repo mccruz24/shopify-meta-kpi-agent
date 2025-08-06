@@ -1,0 +1,182 @@
+name: Financial Discrepancy Investigation
+on: 
+  workflow_dispatch:
+    inputs:
+      investigation_date:
+        description: 'Date to investigate (YYYY-MM-DD)'
+        required: false
+        default: '2025-07-29'
+        type: string
+
+jobs:
+  investigate-discrepancy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests python-dotenv
+          
+      - name: Run Financial Discrepancy Investigation
+        env:
+          SHOPIFY_SHOP_URL: ${{ secrets.SHOPIFY_SHOP_URL }}
+          SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: |
+          echo "🕵️ Starting Financial Discrepancy Investigation"
+          echo "Target Date: ${{ github.event.inputs.investigation_date || '2025-07-29' }}"
+          echo "Investigating: $2,049 (Shopify) vs $674.45 (Transaction System)"
+          echo ""
+          
+          # Run the comprehensive investigation
+          python3 shopify_date_discrepancy_investigator.py
+          
+      - name: Run Current System Analysis
+        env:
+          SHOPIFY_SHOP_URL: ${{ secrets.SHOPIFY_SHOP_URL }}
+          SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: |
+          echo ""
+          echo "🔍 Testing Current Financial Analytics System"
+          echo "============================================="
+          
+          # Test the current system
+          python3 financial_analytics_sync.py test
+          
+          echo ""
+          echo "📊 Extracting July 29 transactions with current method"
+          python3 financial_analytics_sync.py ${{ github.event.inputs.investigation_date || '2025-07-29' }}
+          
+      - name: Run Reconciliation Analysis
+        env:
+          SHOPIFY_SHOP_URL: ${{ secrets.SHOPIFY_SHOP_URL }}
+          SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: |
+          echo ""
+          echo "💰 Running Reconciliation Analysis"
+          echo "=================================="
+          
+          # Run reconciliation to find discrepancies
+          python3 financial_reconciliation.py ${{ github.event.inputs.investigation_date || '2025-07-29' }}
+          
+      - name: Export Raw Shopify Data
+        env:
+          SHOPIFY_SHOP_URL: ${{ secrets.SHOPIFY_SHOP_URL }}
+          SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: |
+          echo ""
+          echo "📥 Exporting Raw Shopify Data for Analysis"
+          echo "=========================================="
+          
+          # Export raw order data for manual comparison
+          python3 -c "
+          import os
+          import sys
+          sys.path.append('.')
+          
+          try:
+              from src.extractors.financial_analytics_extractor import FinancialAnalyticsExtractor
+              from datetime import datetime
+              import json
+              
+              extractor = FinancialAnalyticsExtractor()
+              target_date = '${{ github.event.inputs.investigation_date || '2025-07-29' }}'
+              
+              print(f'📅 Extracting orders created on {target_date}')
+              
+              # Get orders created on target date
+              orders_data = extractor._make_request('orders.json', {
+                  'status': 'any',
+                  'created_at_min': f'{target_date}T00:00:00Z',
+                  'created_at_max': f'{target_date}T23:59:59Z',
+                  'limit': 250
+              })
+              
+              if orders_data and orders_data.get('orders'):
+                  orders = orders_data['orders']
+                  total_value = sum(float(o.get('total_price', 0)) for o in orders)
+                  
+                  print(f'✅ Orders created {target_date}: {len(orders)} orders')
+                  print(f'💰 Total value: \${total_value:,.2f}')
+                  print(f'🔍 Shopify reported: \$2,049.00')
+                  print(f'📊 Discrepancy: \${2049.00 - total_value:,.2f}')
+                  
+                  # Show financial status breakdown
+                  status_breakdown = {}
+                  for order in orders:
+                      status = order.get('financial_status', 'unknown')
+                      if status not in status_breakdown:
+                          status_breakdown[status] = {'count': 0, 'value': 0}
+                      status_breakdown[status]['count'] += 1
+                      status_breakdown[status]['value'] += float(order.get('total_price', 0))
+                  
+                  print(f'')
+                  print(f'📋 Financial Status Breakdown:')
+                  for status, data in status_breakdown.items():
+                      print(f'   {status}: {data[\"count\"]} orders, \${data[\"value\"]:,.2f}')
+                  
+                  # Export detailed data
+                  with open('july_29_orders_analysis.json', 'w') as f:
+                      json.dump({
+                          'target_date': target_date,
+                          'orders_found': len(orders),
+                          'total_value': total_value,
+                          'shopify_reported': 2049.00,
+                          'discrepancy': 2049.00 - total_value,
+                          'status_breakdown': status_breakdown,
+                          'orders': orders
+                      }, f, indent=2)
+                  
+                  print(f'')
+                  print(f'📄 Detailed analysis saved to july_29_orders_analysis.json')
+                  
+              else:
+                  print(f'❌ No orders found for {target_date}')
+                  
+          except Exception as e:
+              print(f'❌ Error during raw data export: {e}')
+              print(f'This might indicate API connection issues or missing data.')
+          "
+          
+      - name: Upload Investigation Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: financial-investigation-results
+          path: |
+            *.json
+            *.log
+          retention-days: 30
+          
+      - name: Investigation Summary
+        run: |
+          echo ""
+          echo "🎯 INVESTIGATION COMPLETE"
+          echo "========================"
+          echo "📊 Check the action logs above for:"
+          echo "   1. Discrepancy analysis results"
+          echo "   2. Current system transaction extraction"
+          echo "   3. Reconciliation findings"
+          echo "   4. Raw Shopify data comparison"
+          echo ""
+          echo "📄 Detailed results are saved as artifacts"
+          echo "💡 This will help solve the \$2,049 vs \$674.45 mystery!"
+          echo ""
+          echo "🔍 Look for patterns like:"
+          echo "   - Orders created July 29 but payment pending"
+          echo "   - Transactions processed July 29 for orders from different dates"
+          echo "   - Missing transaction statuses (pending, authorized, etc.)"
+          echo ""
+          echo "✅ Investigation workflow completed successfully!"
