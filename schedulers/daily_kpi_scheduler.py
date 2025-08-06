@@ -10,6 +10,10 @@ from datetime import datetime, timedelta
 import requests
 import time
 import random
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Add project root to path
 current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -17,7 +21,7 @@ sys.path.append(current_dir)
 
 from src.extractors.shopify_extractor import ShopifyExtractor
 from src.extractors.meta_extractor import MetaExtractor
-from src.extractors.printify_analytics_extractor import PrintifyAnalyticsExtractor
+from src.extractors.printify_extractor import PrintifyAnalyticsExtractor
 
 class DailyKPIScheduler:
     """Automated daily KPI collection for scheduled runs"""
@@ -36,6 +40,25 @@ class DailyKPIScheduler:
         self.shopify = ShopifyExtractor()
         self.meta = MetaExtractor()
         self.printify = PrintifyAnalyticsExtractor()
+    
+    def get_exchange_rate(self) -> float:
+        """Get live USD to EUR exchange rate from exchangerate-api.com"""
+        try:
+            print(f"   💱 Fetching live exchange rate...")
+            url = "https://api.exchangerate-api.com/v4/latest/USD"
+            response = requests.get(url, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                eur_rate = data['rates'].get('EUR', 0)
+                print(f"   ✅ Exchange rate: 1 USD = {eur_rate:.4f} EUR")
+                return eur_rate
+            else:
+                print(f"   ⚠️  Failed to get exchange rate, using fallback: 1.0")
+                return 1.0
+        except Exception as e:
+            print(f"   ⚠️  Exchange rate error: {e}, using fallback: 1.0")
+            return 1.0
     
     def check_date_exists(self, date: datetime) -> bool:
         """Check if date already exists in Notion database"""
@@ -93,6 +116,21 @@ class DailyKPIScheduler:
             printify_data = self.printify.get_daily_costs(target_date)
             time.sleep(2 + random.uniform(0.5, 1.0))  # 2-3s with jitter
             
+            # Get exchange rate for currency conversion
+            exchange_rate = self.get_exchange_rate()
+            
+            # Calculate currency conversions
+            shopify_sales = shopify_data.get('shopify_gross_sales', 0)
+            meta_ad_spend_eur = meta_data.get('meta_ad_spend', 0)
+            meta_ad_spend_usd = meta_ad_spend_eur / exchange_rate if exchange_rate > 0 else meta_ad_spend_eur
+            
+            # Get COGS from Printify extractor (now returns simple dictionary like Meta/Shopify)
+            cogs = printify_data.get('printify_charge', 0)
+            
+            # Calculate profits with currency conversion and COGS
+            profit_usd = shopify_sales - meta_ad_spend_usd - cogs
+            profit_eur = profit_usd * exchange_rate if exchange_rate > 0 else profit_usd
+            
             # Prepare Notion page properties with date field
             properties = {
                 "ID": {
@@ -138,7 +176,10 @@ class DailyKPIScheduler:
                     "number": meta_data.get('roas', 0)
                 },
                 "Printify COGS": {
-                    "number": printify_data.get('printify_charge', 0)
+                    "number": cogs
+                },
+                "Exchange Rate": {
+                    "number": exchange_rate
                 }
             }
             
@@ -154,15 +195,10 @@ class DailyKPIScheduler:
             if response.status_code == 200:
                 print(f"✅ Successfully added KPIs for {date_str} to Notion")
                 
-                # Summary for logs
+                # Summary for logs with currency conversion
                 orders = shopify_data.get('total_orders', 0)
-                sales = shopify_data.get('shopify_gross_sales', 0)
-                ad_spend = meta_data.get('meta_ad_spend', 0)
-                cogs = printify_data.get('printify_charge', 0)
-                profit = sales - ad_spend - cogs
-                
-                print(f"   📊 Summary: {orders} orders, ${sales:.2f} sales, €{ad_spend:.2f} ads, ${cogs:.2f} COGS")
-                print(f"   💰 Estimated profit: ${profit:.2f}")
+                print(f"   📊 Summary: {orders} orders, ${shopify_sales:.2f} sales, €{meta_ad_spend_eur:.2f} ads (${meta_ad_spend_usd:.2f} USD), ${cogs:.2f} COGS")
+                print(f"   💰 Estimated profit: ${profit_usd:.2f} USD (€{profit_eur:.2f} EUR)")
                 
                 return True
             else:
@@ -185,6 +221,64 @@ class DailyKPIScheduler:
                 return self.collect_daily_kpis(target_date, retry_count + 1)
             return False
 
+    def test_system(self) -> bool:
+        """Test all connections and data extraction"""
+        print("🧪 Testing Daily KPI System...")
+        
+        try:
+            # Test Shopify connection
+            print("   🛍️  Testing Shopify connection...")
+            shopify_test = self.shopify.get_daily_sales_data(datetime.now() - timedelta(days=1))
+            if shopify_test:
+                print("   ✅ Shopify connection successful")
+            else:
+                print("   ❌ Shopify connection failed")
+                return False
+            
+            # Test Meta connection
+            print("   📱 Testing Meta connection...")
+            meta_test = self.meta.get_daily_ad_data(datetime.now() - timedelta(days=1))
+            if meta_test:
+                print("   ✅ Meta connection successful")
+            else:
+                print("   ❌ Meta connection failed")
+                return False
+            
+            # Test Printify connection
+            print("   🖨️  Testing Printify connection...")
+            printify_test = self.printify.get_daily_costs(datetime.now() - timedelta(days=1))
+            if printify_test:
+                print("   ✅ Printify connection successful")
+            else:
+                print("   ❌ Printify connection failed")
+                return False
+            
+            # Test exchange rate
+            print("   💱 Testing exchange rate...")
+            exchange_test = self.get_exchange_rate()
+            if exchange_test > 0:
+                print("   ✅ Exchange rate successful")
+            else:
+                print("   ❌ Exchange rate failed")
+                return False
+            
+            # Test Notion connection
+            print("   📝 Testing Notion connection...")
+            url = f"https://api.notion.com/v1/databases/{self.daily_kpis_db}/query"
+            response = requests.post(url, headers=self.headers, json={"page_size": 1}, timeout=10)
+            if response.status_code == 200:
+                print("   ✅ Notion connection successful")
+            else:
+                print("   ❌ Notion connection failed")
+                return False
+            
+            print("✅ All systems operational!")
+            return True
+            
+        except Exception as e:
+            print(f"❌ System test failed: {e}")
+            return False
+
 def main():
     """Main function for scheduled execution"""
     
@@ -201,16 +295,20 @@ def main():
     
     # Handle command line arguments
     if len(sys.argv) > 1:
-        # Specific date provided
-        try:
-            target_date = datetime.strptime(sys.argv[1], '%Y-%m-%d')
-            success = scheduler.collect_daily_kpis(target_date)
-        except ValueError:
-            print("❌ Invalid date format. Use YYYY-MM-DD")
-            print("💡 Usage:")
-            print("   python daily_kpi_scheduler.py           # Yesterday's data")
-            print("   python daily_kpi_scheduler.py 2025-06-25  # Specific date")
-            sys.exit(1)
+        if sys.argv[1] == "test":
+            success = scheduler.test_system()
+        else:
+            # Parse date from command line argument
+            try:
+                target_date = datetime.strptime(sys.argv[1], '%Y-%m-%d')
+                success = scheduler.collect_daily_kpis(target_date)
+            except ValueError:
+                print("❌ Invalid date format. Use YYYY-MM-DD")
+                print("💡 Usage:")
+                print("   python daily_kpi_scheduler.py           # Yesterday's data")
+                print("   python daily_kpi_scheduler.py test      # Test system")
+                print("   python daily_kpi_scheduler.py 2025-06-25  # Specific date")
+                sys.exit(1)
     else:
         # Default: yesterday's data
         success = scheduler.collect_daily_kpis()

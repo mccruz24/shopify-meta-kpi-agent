@@ -345,6 +345,48 @@ class PrintifyAnalyticsExtractor:
         
         return self.extract_analytics_for_date_range(start_date, end_date)
     
+    def get_daily_costs(self, date: datetime = None) -> Dict:
+        """Get daily Printify costs in simple format (compatibility method for daily KPI scheduler)"""
+        if date is None:
+            date = datetime.now() - timedelta(days=1)
+            
+        print(f"🖨️  [DEBUG] Requesting Printify costs for {date.strftime('%Y-%m-%d')}")
+        
+        # Get the detailed analytics data
+        analytics_data = self.extract_single_date(date)
+        
+        print(f"📊 [DEBUG] Retrieved {len(analytics_data) if analytics_data else 0} Printify orders")
+        
+        if analytics_data:
+            # Filter orders to only include the target date (Printify API ignores date filters)
+            target_date_str = date.strftime('%Y-%m-%d')
+            filtered_orders = []
+            
+            for order in analytics_data:
+                order_date = order.get('created_at', '')[:10]  # Get YYYY-MM-DD part
+                if order_date == target_date_str:
+                    filtered_orders.append(order)
+            
+            print(f"📅 [DEBUG] Filtered to {len(filtered_orders)} orders for {target_date_str}")
+            analytics_data = filtered_orders
+            
+            # Check COGS values after filtering
+            if analytics_data:
+                cogs_values = [order.get('total_cogs', 0) for order in analytics_data]
+                print(f"💰 [DEBUG] COGS range: ${min(cogs_values):.2f} to ${max(cogs_values):.2f}")
+            else:
+                print(f"⚠️  [DEBUG] No orders found for {target_date_str} after filtering")
+        
+        # Sum up all the COGS from the analytics records (use correct field name: 'total_cogs')
+        total_cogs = sum(order.get('total_cogs', 0) for order in analytics_data) if analytics_data else 0
+        
+        print(f"🎯 [DEBUG] Total COGS calculated: ${total_cogs:.2f}")
+        
+        # Return in the format expected by daily KPI scheduler (like Meta/Shopify extractors)
+        return {
+            'printify_charge': round(total_cogs, 2)
+        }
+    
     def test_connection(self) -> bool:
         """Test connection to Printify API"""
         try:
