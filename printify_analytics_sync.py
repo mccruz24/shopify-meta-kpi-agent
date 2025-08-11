@@ -11,10 +11,13 @@ import time
 import random
 from typing import Dict, List, Optional
 
-# Add src directory to path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+# Add project root and src directory to path for GitHub Actions compatibility
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = current_dir
+sys.path.append(project_root)
+sys.path.append(os.path.join(project_root, 'src'))
 
-from src.extractors.printify_analytics_extractor import PrintifyAnalyticsExtractor
+from src.extractors.printify_extractor import PrintifyAnalyticsExtractor
 from src.loaders.printify_notion_loader import PrintifyNotionLoader
 
 
@@ -24,7 +27,8 @@ class PrintifyAnalyticsSync:
     def __init__(self, database_id: str):
         self.database_id = database_id
         self.extractor = PrintifyAnalyticsExtractor()
-        self.loader = PrintifyNotionLoader(database_id)
+        self.loader = PrintifyNotionLoader()
+        self.loader.set_database_id(database_id)
     
     def sync_single_date(self, target_date: datetime) -> bool:
         """Sync Printify analytics for a single date"""
