@@ -1,5 +1,7 @@
 import os
 import requests
+import time
+import random
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 from dotenv import load_dotenv
@@ -18,21 +20,44 @@ class ShopifyExtractor:
             'Content-Type': 'application/json'
         }
     
-    def _make_request(self, endpoint: str, params: Dict = None) -> Optional[Dict]:
-        """Make API request to Shopify"""
-        try:
-            url = f"{self.base_url}/{endpoint}"
-            response = requests.get(url, headers=self.headers, params=params or {})
-            
-            if response.status_code == 200:
-                return response.json()
-            else:
-                print(f"❌ Shopify API error {response.status_code}: {response.text}")
-                return None
+    def _make_request(self, endpoint: str, params: Dict = None, max_retries: int = 3) -> Optional[Dict]:
+        """Make API request to Shopify with retry logic and rate limiting handling"""
+        for attempt in range(max_retries):
+            try:
+                url = f"{self.base_url}/{endpoint}"
+                response = requests.get(url, headers=self.headers, params=params or {}, timeout=60)
                 
-        except Exception as e:
-            print(f"❌ Shopify request failed: {e}")
-            return None
+                if response.status_code == 200:
+                    return response.json()
+                elif response.status_code == 429:  # Rate limited
+                    retry_after = int(response.headers.get('Retry-After', 5))
+                    print(f"⚠️  Rate limited. Waiting {retry_after}s before retry {attempt + 1}/{max_retries}")
+                    time.sleep(retry_after + random.uniform(0.5, 2.0))
+                    continue
+                elif response.status_code in [500, 502, 503, 504]:  # Server errors - retry
+                    wait_time = (2 ** attempt) + random.uniform(0.5, 1.5)
+                    print(f"⚠️  Server error {response.status_code}. Retrying in {wait_time:.1f}s ({attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"❌ Shopify API error {response.status_code}: {response.text}")
+                    return None
+                    
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                wait_time = (2 ** attempt) + random.uniform(1.0, 3.0)
+                print(f"⚠️  Network error: {e}. Retrying in {wait_time:.1f}s ({attempt + 1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"❌ Network error after {max_retries} attempts: {e}")
+                    return None
+            except Exception as e:
+                print(f"❌ Shopify request failed: {e}")
+                return None
+        
+        print(f"❌ All {max_retries} retry attempts failed")
+        return None
     
     def get_daily_sales_data(self, date: datetime = None) -> Dict:
         """Get daily sales KPIs for P&L sheet"""

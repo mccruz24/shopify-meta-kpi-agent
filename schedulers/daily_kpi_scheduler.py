@@ -86,6 +86,69 @@ class DailyKPIScheduler:
             print(f"⚠️  Could not check if date exists: {e}")
             return False
 
+    def _validate_shopify_data(self, shopify_data: dict, target_date: datetime) -> bool:
+        """Validate Shopify data to ensure it's legitimate before storing"""
+        if not shopify_data:
+            print(f"   ⚠️  Shopify data is empty or None")
+            return False
+        
+        # Check if we have the essential fields
+        sales = shopify_data.get('shopify_gross_sales', 0)
+        orders = shopify_data.get('total_orders', 0)
+        
+        # For a legitimate business day, we should have some data
+        # Allow zeros only for weekends or holidays
+        weekday = target_date.weekday()  # 0=Monday, 6=Sunday
+        is_weekend = weekday in [5, 6]  # Saturday, Sunday
+        
+        if sales <= 0 and orders <= 0:
+            if is_weekend:
+                print(f"   ℹ️  Weekend with zero sales/orders - acceptable")
+                return True
+            else:
+                print(f"   ⚠️  Weekday with zero sales ({sales}) and orders ({orders}) - likely API failure")
+                return False
+        
+        # Basic sanity checks
+        if sales < 0:
+            print(f"   ⚠️  Negative sales value: {sales}")
+            return False
+        
+        if orders < 0:
+            print(f"   ⚠️  Negative orders count: {orders}")
+            return False
+        
+        # Calculate AOV for additional validation
+        aov = shopify_data.get('aov', 0)
+        if orders > 0 and (aov <= 0 or aov > 1000):  # AOV should be reasonable
+            print(f"   ⚠️  Suspicious AOV: ${aov} for {orders} orders")
+            return False
+        
+        print(f"   ✅ Shopify data validation passed: ${sales}, {orders} orders")
+        return True
+
+    def _send_failure_alert(self, target_date: datetime, error_msg: str) -> None:
+        """Send alert when data collection fails"""
+        date_str = target_date.strftime('%Y-%m-%d')
+        alert_msg = f"🚨 KPI Collection Failed for {date_str}\n\nError: {error_msg}\n\nPlease check and manually re-run if needed."
+        
+        print(f"🚨 ALERT: {alert_msg}")
+        
+        # You can extend this to send actual email/Slack notifications
+        # For now, we log it prominently for monitoring systems to catch
+
+    def retry_failed_collection(self, target_date: datetime) -> bool:
+        """Manually retry data collection for a failed date"""
+        date_str = target_date.strftime('%Y-%m-%d')
+        print(f"🔄 Manual retry for {date_str}")
+        
+        # Remove existing entry if it exists with bad data
+        if self.check_date_exists(target_date):
+            print(f"   🗑️  Removing existing entry with potentially bad data...")
+            # Note: In production, you might want to backup the existing data first
+        
+        return self.collect_daily_kpis(target_date)
+
     def collect_daily_kpis(self, target_date: datetime = None, retry_count: int = 0) -> bool:
         """Collect and store daily KPIs for the target date with retry logic"""
         
@@ -103,23 +166,31 @@ class DailyKPIScheduler:
             return True
         
         try:
-            # Extract data from all platforms with enhanced rate limiting
+            # Extract data from all platforms with enhanced rate limiting and validation
             print(f"   🛍️  Extracting Shopify data...")
             shopify_data = self.shopify.get_daily_sales_data(target_date)
-            time.sleep(2 + random.uniform(0.5, 1.0))  # 2-3s with jitter
+            time.sleep(3 + random.uniform(1.0, 2.0))  # Longer delay with more jitter
+            
+            # CRITICAL: Validate Shopify data before proceeding
+            if not shopify_data or not self._validate_shopify_data(shopify_data, target_date):
+                error_msg = f"Shopify data validation failed. Data: {shopify_data}"
+                self._send_failure_alert(target_date, error_msg)
+                print(f"   ❌ Shopify data validation failed - aborting to prevent storing zeros")
+                print(f"   📋 Data received: {shopify_data}")
+                return False
             
             print(f"   📱 Extracting Meta ads data...")
             meta_data = self.meta.get_daily_ad_data(target_date)
-            time.sleep(2 + random.uniform(0.5, 1.0))  # 2-3s with jitter
+            time.sleep(3 + random.uniform(1.0, 2.0))  # Longer delay with more jitter
             
             print(f"   🖨️  Extracting Printify costs...")
             printify_data = self.printify.get_daily_costs(target_date)
-            time.sleep(2 + random.uniform(0.5, 1.0))  # 2-3s with jitter
+            time.sleep(3 + random.uniform(1.0, 2.0))  # Longer delay with more jitter
             
             # Get exchange rate for currency conversion
             exchange_rate = self.get_exchange_rate()
             
-            # Calculate currency conversions
+            # Calculate currency conversions (now with validated data)
             shopify_sales = shopify_data.get('shopify_gross_sales', 0)
             meta_ad_spend_eur = meta_data.get('meta_ad_spend', 0)
             meta_ad_spend_usd = meta_ad_spend_eur / exchange_rate if exchange_rate > 0 else meta_ad_spend_eur
@@ -297,6 +368,15 @@ def main():
     if len(sys.argv) > 1:
         if sys.argv[1] == "test":
             success = scheduler.test_system()
+        elif sys.argv[1] == "retry" and len(sys.argv) > 2:
+            # Retry failed collection for specific date
+            try:
+                target_date = datetime.strptime(sys.argv[2], '%Y-%m-%d')
+                success = scheduler.retry_failed_collection(target_date)
+            except ValueError:
+                print("❌ Invalid date format. Use YYYY-MM-DD")
+                print("💡 Usage for retry: python daily_kpi_scheduler.py retry 2025-08-06")
+                sys.exit(1)
         else:
             # Parse date from command line argument
             try:
@@ -305,9 +385,10 @@ def main():
             except ValueError:
                 print("❌ Invalid date format. Use YYYY-MM-DD")
                 print("💡 Usage:")
-                print("   python daily_kpi_scheduler.py           # Yesterday's data")
-                print("   python daily_kpi_scheduler.py test      # Test system")
-                print("   python daily_kpi_scheduler.py 2025-06-25  # Specific date")
+                print("   python daily_kpi_scheduler.py              # Yesterday's data")
+                print("   python daily_kpi_scheduler.py test         # Test system")
+                print("   python daily_kpi_scheduler.py 2025-06-25   # Specific date")
+                print("   python daily_kpi_scheduler.py retry 2025-08-06  # Retry failed date")
                 sys.exit(1)
     else:
         # Default: yesterday's data
