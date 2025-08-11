@@ -29,6 +29,9 @@ logger = logging.getLogger(__name__)
 def main():
     """Main scheduler function"""
     logger.info("🚀 Starting Printify Analytics Scheduler")
+    logger.info(f"📁 Current working directory: {os.getcwd()}")
+    logger.info(f"📄 Script location: {os.path.abspath(__file__)}")
+    logger.info(f"🐍 Python path: {sys.path[:3]}...")  # Show first 3 path entries
     
     # Validate environment variables
     required_vars = ['NOTION_TOKEN', 'PRINTIFY_API_TOKEN', 'PRINTIFY_ANALYTICS_DB_ID']
