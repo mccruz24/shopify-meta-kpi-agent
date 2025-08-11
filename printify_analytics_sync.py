@@ -50,7 +50,7 @@ class PrintifyAnalyticsSync:
             
             # Load into Notion
             print(f"   📝 Loading Printify data into Notion...")
-            results = self.loader.load_printify_batch(printify_data, skip_if_exists=True)
+            results = self.loader.load_orders_batch(printify_data, skip_if_exists=True)
             
             # Summary
             successful = results['successful']
