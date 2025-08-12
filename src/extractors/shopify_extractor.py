@@ -9,6 +9,13 @@ class ShopifyExtractor:
     """Extract KPI data from Shopify"""
     
     def __init__(self):
+        # Debug all environment variables to see what's available
+        print(f"🔍 Environment Variables Debug:")
+        print(f"   All env vars starting with SHOPIFY:")
+        for key, value in os.environ.items():
+            if key.startswith('SHOPIFY'):
+                print(f"     {key}: {value[:20] if value else 'None'}...")
+        
         self.shop_url = os.getenv('SHOPIFY_SHOP_URL')
         self.access_token = os.getenv('SHOPIFY_ACCESS_TOKEN')
         
@@ -21,6 +28,11 @@ class ShopifyExtractor:
             print("❌ SHOPIFY_SHOP_URL environment variable is not set!")
         if not self.access_token:
             print("❌ SHOPIFY_ACCESS_TOKEN environment variable is not set!")
+        
+        # Check if we have valid values before proceeding
+        if not self.shop_url or not self.access_token:
+            print("❌ Cannot proceed without valid Shopify credentials!")
+            return
         
         self.base_url = f"https://{self.shop_url}/admin/api/2023-10"
         self.headers = {
