@@ -11,17 +11,38 @@ class ShopifyExtractor:
     def __init__(self):
         self.shop_url = os.getenv('SHOPIFY_SHOP_URL')
         self.access_token = os.getenv('SHOPIFY_ACCESS_TOKEN')
+        
+        # Debug logging for GitHub Actions troubleshooting
+        print(f"🔍 Shopify Extractor Debug:")
+        print(f"   Shop URL: {self.shop_url}")
+        print(f"   Access Token: {self.access_token[:20] if self.access_token else 'None'}...")
+        
+        if not self.shop_url:
+            print("❌ SHOPIFY_SHOP_URL environment variable is not set!")
+        if not self.access_token:
+            print("❌ SHOPIFY_ACCESS_TOKEN environment variable is not set!")
+        
         self.base_url = f"https://{self.shop_url}/admin/api/2023-10"
         self.headers = {
             'X-Shopify-Access-Token': self.access_token,
             'Content-Type': 'application/json'
         }
+        
+        print(f"   Base URL: {self.base_url}")
+        print(f"   Headers: {self.headers}")
     
     def _make_request(self, endpoint: str, params: Dict = None, max_retries: int = 3) -> Optional[Dict]:
         """Make API request to Shopify with retry logic and rate limiting handling"""
         for attempt in range(max_retries):
             try:
                 url = f"{self.base_url}/{endpoint}"
+                
+                # Debug logging for API request
+                print(f"🔍 Shopify API Request Debug:")
+                print(f"   URL: {url}")
+                print(f"   Headers: {self.headers}")
+                print(f"   Params: {params}")
+                
                 response = requests.get(url, headers=self.headers, params=params or {}, timeout=60)
                 
                 if response.status_code == 200:
