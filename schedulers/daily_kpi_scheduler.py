@@ -10,10 +10,6 @@ from datetime import datetime, timedelta
 import requests
 import time
 import random
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 # Add project root to path
 current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

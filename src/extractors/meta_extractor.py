@@ -2,9 +2,6 @@ import os
 import requests
 from datetime import datetime, timedelta
 from typing import Dict, Optional
-from dotenv import load_dotenv
-
-load_dotenv()
 
 class MetaExtractor:
     """Extract KPI data from Meta Ads"""
