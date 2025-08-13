@@ -135,45 +135,10 @@ jobs:
           python schedulers/financial_analytics_scheduler.py
         fi
 
-  # Step 4: Traffic Analytics (depends on financial-analytics)
-  traffic-analytics:
-    name: "4️⃣ Traffic Analytics Collection"
-    needs: financial-analytics
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-    
-    - name: Run traffic analytics collection
-      env:
-        NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-        SHOPIFY_SHOP_URL: ${{ secrets.SHOPIFY_SHOP_URL }}
-        SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
-      run: |
-        if [ -n "${{ inputs.date }}" ]; then
-          echo "🚗 Running Traffic Analytics for specific date: ${{ inputs.date }}"
-          python schedulers/traffic_analytics_scheduler.py "${{ inputs.date }}"
-        else
-          echo "🚗 Running Traffic Analytics for yesterday (default)"
-          python schedulers/traffic_analytics_scheduler.py
-        fi
-
-  # Step 5: Printify Analytics (depends on traffic-analytics)
+  # Step 4: Printify Analytics (depends on financial-analytics)
   printify-analytics:
-    name: "5️⃣ Printify Analytics Collection"
-    needs: traffic-analytics
+    name: "4️⃣ Printify Analytics Collection"
+    needs: financial-analytics
     runs-on: ubuntu-latest
     
     steps:
@@ -205,9 +170,9 @@ jobs:
           python schedulers/printify_analytics_scheduler.py
         fi
 
-  # Step 6: Daily Platform Metrics (depends on printify-analytics)
+  # Step 5: Daily Platform Metrics (depends on printify-analytics)
   daily-platform-metrics:
-    name: "6️⃣ Daily Platform Metrics Transform"
+    name: "5️⃣ Daily Platform Metrics Transform"
     needs: printify-analytics
     runs-on: ubuntu-latest
     
@@ -243,7 +208,7 @@ jobs:
   # Summary job to report completion
   pipeline-summary:
     name: "📊 Pipeline Summary"
-    needs: [daily-kpi, orders-analytics, financial-analytics, traffic-analytics, printify-analytics]
+    needs: [daily-kpi, orders-analytics, financial-analytics, printify-analytics, daily-platform-metrics]
     runs-on: ubuntu-latest
     if: always()
     
@@ -255,15 +220,15 @@ jobs:
         echo "Daily KPI: ${{ needs.daily-kpi.result }}"
         echo "Orders Analytics: ${{ needs.orders-analytics.result }}"
         echo "Financial Analytics: ${{ needs.financial-analytics.result }}"
-        echo "Traffic Analytics: ${{ needs.traffic-analytics.result }}"
         echo "Printify Analytics: ${{ needs.printify-analytics.result }}"
+        echo "Daily Platform Metrics: ${{ needs.daily-platform-metrics.result }}"
         echo "=================================="
         
         if [ "${{ needs.daily-kpi.result }}" == "success" ] && \
            [ "${{ needs.orders-analytics.result }}" == "success" ] && \
            [ "${{ needs.financial-analytics.result }}" == "success" ] && \
-           [ "${{ needs.traffic-analytics.result }}" == "success" ] && \
-           [ "${{ needs.printify-analytics.result }}" == "success" ]; then
+           [ "${{ needs.printify-analytics.result }}" == "success" ] && \
+           [ "${{ needs.daily-platform-metrics.result }}" == "success" ]; then
           echo "✅ All analytics pipelines completed successfully!"
         else
           echo "⚠️ Some pipelines failed. Check individual job logs."

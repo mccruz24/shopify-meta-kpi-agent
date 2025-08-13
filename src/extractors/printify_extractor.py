@@ -3,6 +3,9 @@ import requests
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class PrintifyAnalyticsExtractor:
     """Enhanced Printify extractor for comprehensive analytics data"""
