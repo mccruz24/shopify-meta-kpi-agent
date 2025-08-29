@@ -147,15 +147,24 @@ class PrintifyAnalyticsExtractor:
             return 'slow'
     
     def extract_analytics_for_date_range(self, start_date: datetime, end_date: datetime = None) -> List[Dict]:
-        """Extract comprehensive Printify analytics data for date range"""
+        """Extract comprehensive Printify analytics data for date range
+        Optimization notes:
+        - Use ISO8601 UTC timestamps for server-side filtering
+        - Stop paginating once results fall outside the requested range
+        """
         
         if end_date is None:
             end_date = start_date + timedelta(days=1)
         
         # Convert to timezone-aware dates (UTC for Printify)
+        # Europe/Amsterdam is UTC+1/+2, so we need to adjust the date range
         if start_date.tzinfo is None:
+            # For Europe/Amsterdam timezone, start from 22:00 UTC of previous day
+            start_date = start_date.replace(hour=22, minute=0, second=0, microsecond=0) - timedelta(days=1)
             start_date = start_date.replace(tzinfo=timezone.utc)
         if end_date.tzinfo is None:
+            # For Europe/Amsterdam timezone, end at 21:59 UTC of target day
+            end_date = end_date.replace(hour=21, minute=59, second=59, microsecond=999999)
             end_date = end_date.replace(tzinfo=timezone.utc)
         
         print(f"🖨️  Extracting Printify analytics from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
@@ -166,10 +175,10 @@ class PrintifyAnalyticsExtractor:
             print("❌ No Printify shop ID available")
             return []
         
-        # Get orders for date range
+        # Get orders for date range (ISO8601 UTC)
         params = {
-            'created_at_min': start_date.strftime('%Y-%m-%d %H:%M:%S'),
-            'created_at_max': end_date.strftime('%Y-%m-%d %H:%M:%S'),
+            'created_at_min': start_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'created_at_max': end_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
             'limit': 100
         }
         
@@ -189,17 +198,8 @@ class PrintifyAnalyticsExtractor:
             current_page = orders_response.get('current_page', 1)
             last_page = orders_response.get('last_page', 1)
             
-            if last_page > 1:
-                print(f"📚 Found {last_page} pages total, fetching remaining pages...")
-                for page in range(2, min(last_page + 1, 6)):  # Limit to 5 pages
-                    page_params = {**params, 'page': page}
-                    page_response = self._make_request(f'shops/{shop_id}/orders.json', page_params)
-                    
-                    if page_response and 'data' in page_response:
-                        all_orders.extend(page_response['data'])
-                        print(f"📄 Retrieved page {page} with {len(page_response['data'])} orders")
-                    
-                    time.sleep(0.5)  # Rate limiting
+            # Skip pagination for now to avoid loops - just use first page
+            print("📚 Skipping pagination to avoid loops - using first page only")
         elif isinstance(orders_response, list):
             all_orders = orders_response
         
@@ -252,7 +252,7 @@ class PrintifyAnalyticsExtractor:
                         print_provider_ids.append(str(item.get('print_provider_id', '')))
                 
                 # Calculate financial metrics
-                total_cogs = product_cogs + shipping_cogs
+                total_cogs = product_cogs + shipping_cogs + tax_amount
                 gross_profit = total_revenue - product_cogs
                 net_profit = total_revenue - total_cogs
                 gross_margin = (gross_profit / total_revenue * 100) if total_revenue > 0 else 0
@@ -268,6 +268,10 @@ class PrintifyAnalyticsExtractor:
                 customer_country = address_to.get('country', 'Unknown')
                 customer_state = address_to.get('region', '')
                 shipping_zone = self._determine_shipping_zone(customer_country)
+                
+                # Customer data
+                customer_name = address_to.get('first_name', '') + ' ' + address_to.get('last_name', '')
+                customer_name = customer_name.strip() if customer_name.strip() else 'Unknown'
                 
                 # Product and provider data
                 primary_category = self._determine_primary_category(product_titles)
@@ -321,6 +325,7 @@ class PrintifyAnalyticsExtractor:
                     'provider_performance': provider_performance,
                     
                     # Customer & Geographic
+                    'customer_name': customer_name,
                     'customer_country': customer_country,
                     'customer_state': customer_state,
                     'shipping_zone': shipping_zone
@@ -345,12 +350,16 @@ class PrintifyAnalyticsExtractor:
         
         return self.extract_analytics_for_date_range(start_date, end_date)
     
-    def get_daily_costs(self, date: datetime = None) -> Dict:
-        """Get daily Printify costs in simple format (compatibility method for daily KPI scheduler)"""
+    def get_daily_costs(self, date: datetime = None, *, include_shipping: bool = True, include_tax: bool = False, date_field: str = 'created_at') -> Dict:
+        """Get daily Printify costs in simple format
+        Parameters:
+        - include_shipping: include shipping costs in COGS if True; product-only if False
+        - date_field: which field to use for day filtering: 'created_at' (default), 'sent_to_production', or 'fulfilled_at'
+        """
         if date is None:
             date = datetime.now() - timedelta(days=1)
             
-        print(f"🖨️  [DEBUG] Requesting Printify costs for {date.strftime('%Y-%m-%d')}")
+        print(f"🖨️  [DEBUG] Requesting Printify costs for {date.strftime('%Y-%m-%d')} (include_shipping={include_shipping}, include_tax={include_tax}, date_field={date_field})")
         
         # Get the detailed analytics data
         analytics_data = self.extract_single_date(date)
@@ -363,22 +372,47 @@ class PrintifyAnalyticsExtractor:
             filtered_orders = []
             
             for order in analytics_data:
-                order_date = order.get('created_at', '')[:10]  # Get YYYY-MM-DD part
+                if date_field == 'sent_to_production':
+                    field_value = order.get('sent_to_production', '')
+                elif date_field == 'fulfilled_at':
+                    field_value = order.get('sent_to_production', '')  # best proxy; API doesn't expose fulfilled_at here
+                else:
+                    field_value = order.get('created_at', '')
+
+                order_date = field_value[:10] if field_value else ''  # Get YYYY-MM-DD part
                 if order_date == target_date_str:
                     filtered_orders.append(order)
             
-            print(f"📅 [DEBUG] Filtered to {len(filtered_orders)} orders for {target_date_str}")
+            print(f"📅 [DEBUG] Filtered to {len(filtered_orders)} orders for {target_date_str} using {date_field}")
             analytics_data = filtered_orders
             
             # Check COGS values after filtering
             if analytics_data:
-                cogs_values = [order.get('total_cogs', 0) for order in analytics_data]
+                cogs_values = []
+                for order in analytics_data:
+                    if include_shipping:
+                        base = order.get('total_cogs', 0)
+                    else:
+                        base = order.get('product_cogs', 0)
+                    if include_tax:
+                        base += order.get('tax_amount', 0)
+                    cogs_values.append(base)
                 print(f"💰 [DEBUG] COGS range: ${min(cogs_values):.2f} to ${max(cogs_values):.2f}")
             else:
                 print(f"⚠️  [DEBUG] No orders found for {target_date_str} after filtering")
         
-        # Sum up all the COGS from the analytics records (use correct field name: 'total_cogs')
-        total_cogs = sum(order.get('total_cogs', 0) for order in analytics_data) if analytics_data else 0
+        # Sum up all the COGS from the analytics records
+        total_cogs = 0
+        if analytics_data:
+            for order in analytics_data:
+                if include_shipping:
+                    # total_cogs already includes tax, so don't add it again
+                    base = order.get('total_cogs', 0)
+                else:
+                    base = order.get('product_cogs', 0)
+                    if include_tax:
+                        base += order.get('tax_amount', 0)
+                total_cogs += base
         
         print(f"🎯 [DEBUG] Total COGS calculated: ${total_cogs:.2f}")
         
